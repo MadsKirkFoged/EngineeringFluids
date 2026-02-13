@@ -107,7 +107,7 @@ public class CoolPropOracle_UpdatePT_Tests
         double p_ref = refFluid.Pressure!.Pascal;
 
         // --- Your implementation ---
-        var a = new Ammonia();
+        var a = new AmmoniaDouble();
 
         try
         {
@@ -119,11 +119,11 @@ public class CoolPropOracle_UpdatePT_Tests
             return;
         }
 
-        double rho = a.Density!.KilogramPerCubicMeter;
-        double h = a.Enthalpy.SI;
-        double s = a.Entropy.SI;
-        double u = a.InternalEnergy.SI;
-        double p = a.Pressure.Pascal;
+        double rho = a.Density;
+        double h = a.Enthalpy;
+        double s = a.Entropy;
+        double u = a.InternalEnergy;
+        double p = a.Pressure;
 
         // --- Assertions ---
         // Start a bit looser, tighten once stable
@@ -252,7 +252,7 @@ public class CoolPropOracle_UpdatePT_Tests
             double p_ref = refFluid.Pressure!.Pascal;
 
             // Your model
-            var a = new Ammonia();
+            var a = new AmmoniaDouble();
             try
             {
                 a.UpdatePT(P, T);
@@ -269,11 +269,11 @@ public class CoolPropOracle_UpdatePT_Tests
                 return;
             }
 
-            double rho = a.Density!.KilogramPerCubicMeter;
-            double h = a.Enthalpy.SI;
-            double s = a.Entropy.SI;
-            double u = a.InternalEnergy.SI;
-            double p = a.Pressure.Pascal;
+            double rho = a.Density!;
+            double h = a.Enthalpy;
+            double s = a.Entropy;
+            double u = a.InternalEnergy;
+            double p = a.Pressure;
 
             // Errors
             double e_rho = RelErr(rho_ref, rho);

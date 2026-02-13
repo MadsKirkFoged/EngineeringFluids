@@ -13,6 +13,12 @@ public static class SaturationSolver
         Molarity RhomolarL,
         Molarity RhomolarV);
 
+    public sealed record SatResultDouble(
+    double T,
+    double Psat,
+    double RhomolarL,
+    double RhomolarV);
+
     public static SatResult SolveAtT(this Ammonia local,Temperature T)
     {
         if (T == null)

@@ -28,7 +28,7 @@ public class Benchy
     private static readonly float deltaF = (float)(rho / (rhoc * M));
 
     private static readonly Fluid SharpFluid = new Fluid(FluidList.Ammonia);
-    private static readonly Ammonia EngineeringFluid = new Ammonia();
+    private static readonly AmmoniaDouble EngineeringFluid = new AmmoniaDouble();
 
     private static readonly Pressure pressure = Pressure.FromBar(21);
     private static readonly Temperature temperature = Temperature.FromDegreeCelsius(100);
@@ -41,11 +41,11 @@ public class Benchy
     //| SharpFluidupdatePT  |  22.78 us |  10.28 us |  0.563 us |  0.7629 |   3.26 KB |
     //| EngineeringUpdatePT | 473.09 us | 185.31 us | 10.157 us | 70.3125 | 299.65 KB |
 
-    // 2. speed upgrade (It make it slower...)
-    //    | Method              | Mean        | Error     | StdDev    | Gen0     | Allocated |
-    //|-------------------- |------------:|----------:|----------:|---------:|----------:|
-    //| SharpFluidupdatePT  |    21.38 us |  32.44 us |  1.778 us |   0.7629 |   3.26 KB |
-    //| EngineeringUpdatePT | 1,227.37 us | 448.49 us | 24.583 us | 289.0625 |   1225 KB |
+    // 2. speed upgrade (After converting to double)
+    //| Method              | Mean     | Error     | StdDev   | Gen0   | Allocated |
+    //|-------------------- |---------:|----------:|---------:|-------:|----------:|
+    //| SharpFluidupdatePT  | 20.30 us |  3.776 us | 0.207 us | 0.7629 |   3.26 KB |
+    //| EngineeringUpdatePT | 83.37 us | 19.059 us | 1.045 us | 1.4648 |   6.45 KB |
 
 
     [Benchmark]

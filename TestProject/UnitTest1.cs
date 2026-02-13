@@ -70,7 +70,7 @@ public class AmmoniaTests
     {
 
         //Arrange
-        var test = new Ammonia();
+        var test = new AmmoniaDouble();
         Pressure p = Pressure.FromBar(16.5404255202634);
         Temperature t = Temperature.FromKelvin(400);
 
@@ -90,10 +90,10 @@ public class AmmoniaTests
         Assert.AreEqual(-1.5263639324940277, test.AlphaR_dDelta, 0.0000001000);
         Assert.AreEqual(-0.15426556068786079, test.AlphaR_dTau, 0.0000001);
 
-        Assert.AreEqual(1654042.55202634, test.Pressure.SI, 1);
-        Assert.AreEqual(6298.33191543816, test.Entropy.SI, 0.001);
-        Assert.AreEqual(1694261.00050462, test.InternalEnergy.SI, 0.01);
-        Assert.AreEqual(1878043.50628532, test.Enthalpy.SI, 0.1);
+        Assert.AreEqual(1654042.55202634, test.Pressure, 1);
+        Assert.AreEqual(6298.33191543816, test.Entropy, 0.001);
+        Assert.AreEqual(1694261.00050462, test.InternalEnergy, 0.01);
+        Assert.AreEqual(1878043.50628532, test.Enthalpy, 0.1);
 
 
         Assert.AreEqual(Phases.Gas, test.Phase);
@@ -311,14 +311,14 @@ public class AmmoniaTests
     [TestMethod]
     public void UpdatePT_Newton_VaporPoint()
     {
-        var test = new Ammonia();
+        var test = new AmmoniaDouble();
         Pressure p = Pressure.FromBar(16.5404255202634);
         Temperature t = Temperature.FromKelvin(400);
 
         test.UpdatePT(p, t);
 
-        Assert.AreEqual(400, test.Temperature.Kelvin, 1e-10);
-        Assert.AreEqual(1654042.55202634, test.Pressure.Pascal, 1);
+        Assert.AreEqual(400, test.Temperature, 1e-10);
+        Assert.AreEqual(1654042.55202634, test.Pressure, 1);
         Assert.AreEqual(0.03858520868560085, test.Delta, 0.00001);
     }
 
