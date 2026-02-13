@@ -111,7 +111,7 @@ public class CoolPropOracle_UpdatePT_Tests
 
         try
         {
-            a.UpdatePT(P, T);
+            a.UpdatePT(P.SI, T.SI);
         }
         catch (Exception ex)
         {
@@ -255,7 +255,7 @@ public class CoolPropOracle_UpdatePT_Tests
             var a = new AmmoniaDouble();
             try
             {
-                a.UpdatePT(P, T);
+                a.UpdatePT(P.SI, T.SI);
             }
             catch (Exception ex)
             {

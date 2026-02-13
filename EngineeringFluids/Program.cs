@@ -10,12 +10,15 @@ using EngineeringUnits;
 using System.Diagnostics;
 using EngineeringFluids.Helmholtz.Solvers;
 
-var input = new Ammonia();
+//var input = new Ammonia();
 var inputD = new AmmoniaDouble();
 
-for (int i = 0; i < 10000; i++)
+double pressure = 2100000; // Pressure.FromBar(21).SI;
+double temperature = 373.15; // Temperature.FromDegreeCelsius(100).SI;
+
+for (int i = 0; i < 1000000; i++)
 {
-    inputD.UpdatePT(Pressure.FromBar(21), Temperature.FromDegreeCelsius(100));
+    inputD.UpdatePT(pressure, temperature);
 }
 
 

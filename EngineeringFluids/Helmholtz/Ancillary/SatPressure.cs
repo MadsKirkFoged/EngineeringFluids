@@ -51,6 +51,25 @@ namespace EngineeringFluids.Helmholtz
 
         }
 
+        public static double CalculateSaturationPressureDouble(double temperature)
+        {
+
+            double temperatureDouble = temperature;
+
+            double theta = 1.0 - temperatureDouble / Tr;
+            double sum = 0.0;
+
+            for (int i = 0; i < Coefficients.Count; i++)
+            {
+                sum += Coefficients[i] * Math.Pow(theta, Exponents[i]);
+            }
+
+
+            double result = reducingValue * Math.Exp(Tr / temperatureDouble * sum);
+            return result;
+
+        }
+
         public static Temperature CalculateSaturationTemperature(Pressure Pressure)
         {
             double low = Tmin;

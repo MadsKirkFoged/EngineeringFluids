@@ -14,10 +14,10 @@ public static partial class Update
         => UpdatePTCore(local, pTarget, t, phaseHint, strictHint: true);
 
 
-    public static void UpdatePT(this AmmoniaDouble local, Pressure pTarget, Temperature t)
+    public static void UpdatePT(this AmmoniaDouble local, double pTarget, double t)
     => UpdatePTCore(local, pTarget, t, Phases.Unknown, strictHint: false);
 
-    public static void UpdatePT(this AmmoniaDouble local, Pressure pTarget, Temperature t, Phases phaseHint)
+    public static void UpdatePT(this AmmoniaDouble local, double pTarget, double t, Phases phaseHint)
         => UpdatePTCore(local, pTarget, t, phaseHint, strictHint: true);
 
 
@@ -70,21 +70,15 @@ public static partial class Update
         // local._Q is internal; in your model, Q is derived from _isTwoPhase so this is enough.
     }
 
-    private static void UpdatePTCore(AmmoniaDouble local, Pressure pTarget, Temperature t, Phases phaseHint, bool strictHint)
+    private static void UpdatePTCore(AmmoniaDouble local, double pTarget, double t, Phases phaseHint, bool strictHint)
     {
-        if (local == null)
-            throw new ArgumentNullException(nameof(local));
-        if (pTarget == null)
-            throw new ArgumentNullException(nameof(pTarget));
-        if (t == null)
-            throw new ArgumentNullException(nameof(t));
 
         // Match CoolProp behavior: PT sets single-phase state and Q=-1
         local.ClearTwoPhase();
-        local.Temperature = t.SI;
+        local.Temperature = t;
 
-        double T = t.Kelvin;
-        double p = pTarget.Pascal;
+        double T = t;
+        double p = pTarget;
 
         // Determine phase (or honor imposed phase)
         Phases phase;
@@ -147,7 +141,7 @@ public static partial class Update
             return Phases.Supercritical;
 
         // Like CoolProp: near triple, phase determination is tricky; we still use psat(T) but keep a tight two-phase band. [1](https://coolprop.org/_static/doxygen/html/_helmholtz_e_o_s_mixture_backend_8cpp_source.html)
-        double psat = Saturation.CalculateSaturationPressure(Temperature.FromKelvin(T)).Pascal;
+        double psat = Saturation.CalculateSaturationPressureDouble(T);
 
         // Two-phase ambiguity band. Start tight; widen slightly only if you see false positives.
         double rel = Math.Abs(p - psat) / Math.Max(psat, 1.0);
@@ -207,9 +201,9 @@ public static partial class Update
             // Use vapor ancillary if in range (fast)
             if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
             {
-                var rhoV = VaporDensity.CalculateDensity(Temperature.FromKelvin(T));
-                if (rhoV != null && double.IsFinite(rhoV.MolesPerCubicMeter) && rhoV.MolesPerCubicMeter > 0)
-                    return Math.Max(1e-12, Math.Min(rhoV.MolesPerCubicMeter, 10.0 * a.Critical.MolarDensity));
+                var rhoV = VaporDensity.CalculateDensityDouble(T);
+                if (rhoV != null && double.IsFinite(rhoV) && rhoV > 0)
+                    return Math.Max(1e-12, Math.Min(rhoV, 10.0 * a.Critical.MolarDensity));
             }
             return rhoIdeal;
         }
@@ -219,9 +213,9 @@ public static partial class Update
             // Use liquid ancillary if in range (fast)
             if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
             {
-                var rhoL = LiquidDensity.CalculateDensity(Temperature.FromKelvin(T));
-                if (rhoL != null && double.IsFinite(rhoL.MolesPerCubicMeter) && rhoL.MolesPerCubicMeter > 0)
-                    return Math.Max(1e-12, Math.Min(rhoL.MolesPerCubicMeter, 20.0 * a.Critical.MolarDensity));
+                var rhoL = LiquidDensity.CalculateDensityDouble(T);
+                if (rhoL != null && double.IsFinite(rhoL) && rhoL > 0)
+                    return Math.Max(1e-12, Math.Min(rhoL, 20.0 * a.Critical.MolarDensity));
             }
 
             // Fallback: dense guess

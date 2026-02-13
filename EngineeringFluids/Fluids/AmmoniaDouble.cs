@@ -4,6 +4,7 @@ using EngineeringFluids.Helmholtz.Solvers;
 using EngineeringUnits;
 using EngineeringUnits.Units;
 using System;
+using System.Collections.Concurrent;
 using static EngineeringFluids.Helmholtz.Phase;
 
 namespace EngineeringFluids.Fluids;
@@ -432,11 +433,25 @@ public class AmmoniaDouble
                ResidualHelmholtzGaoB.alphaR(delta, tau);
     }
 
+    //Cache
+
+    private static readonly ConcurrentDictionary<(double, double), double> CachealphaR_dDelta = new();
     private static double alphaR_dDelta(double delta, double tau)
     {
-        return ResidualHelmholtzPower.alphaR_dDelta(delta, tau) +
+            var key = (delta, tau);
+
+            if (CachealphaR_dDelta.TryGetValue(key, out double local))
+                return local;
+
+
+        double result = ResidualHelmholtzPower.alphaR_dDelta(delta, tau) +
                ResidualHelmholtzGaussian.alphaR_dDelta(delta, tau) +
                ResidualHelmholtzGaoB.alphaR_dDelta(delta, tau);
+
+            _ = CachealphaR_dDelta.TryAdd(key, result);
+
+            return result;
+
     }
 
     private static double alphaR_dTau(double delta, double tau)
@@ -446,11 +461,23 @@ public class AmmoniaDouble
                ResidualHelmholtzGaoB.alphaR_dTau(delta, tau);
     }
 
+
+    private static readonly ConcurrentDictionary<(double, double), double> CachealphaR_dDelta2 = new();
     private static double alphaR_dDelta2(double delta, double tau)
     {
-        return ResidualHelmholtzPower.alphaR_dDelta2(delta, tau) +
+        var key = (delta, tau);
+
+        if (CachealphaR_dDelta2.TryGetValue(key, out double local))
+            return local;
+
+        double result = ResidualHelmholtzPower.alphaR_dDelta2(delta, tau) +
                ResidualHelmholtzGaussian.alphaR_dDelta2(delta, tau) +
                ResidualHelmholtzGaoB.alphaR_dDelta2(delta, tau);
+
+
+        _ = CachealphaR_dDelta2.TryAdd(key, result);
+
+        return result;
     }
 
 

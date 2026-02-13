@@ -76,7 +76,7 @@ public class AmmoniaTests
 
 
         //Act
-        test.UpdatePT(p, t);
+        test.UpdatePT(p.SI, t.SI);
 
         var d2 = test.AlphaR_dDelta2;
 
@@ -315,7 +315,7 @@ public class AmmoniaTests
         Pressure p = Pressure.FromBar(16.5404255202634);
         Temperature t = Temperature.FromKelvin(400);
 
-        test.UpdatePT(p, t);
+        test.UpdatePT(p.SI, t.SI);
 
         Assert.AreEqual(400, test.Temperature, 1e-10);
         Assert.AreEqual(1654042.55202634, test.Pressure, 1);

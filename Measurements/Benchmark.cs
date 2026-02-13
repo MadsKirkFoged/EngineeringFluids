@@ -33,6 +33,9 @@ public class Benchy
     private static readonly Pressure pressure = Pressure.FromBar(21);
     private static readonly Temperature temperature = Temperature.FromDegreeCelsius(100);
 
+    private static readonly double pressured = 2100000; // Pressure.FromBar(21).SI;
+    private static readonly double temperatured = 373.15; // Temperature.FromDegreeCelsius(100).SI;
+
 
 
     // 1. speed upgrade
@@ -47,6 +50,26 @@ public class Benchy
     //| SharpFluidupdatePT  | 20.30 us |  3.776 us | 0.207 us | 0.7629 |   3.26 KB |
     //| EngineeringUpdatePT | 83.37 us | 19.059 us | 1.045 us | 1.4648 |   6.45 KB |
 
+    // Added a cache
+    //    | Method              | Mean     | Error     | StdDev   | Gen0   | Allocated |
+    //|-------------------- |---------:|----------:|---------:|-------:|----------:|
+    //| SharpFluidupdatePT  | 20.68 us | 10.163 us | 0.557 us | 0.7629 |   3.26 KB |
+    //| EngineeringUpdatePT | 11.00 us |  2.389 us | 0.131 us | 1.5259 |   6.45 KB |
+
+
+    // No more units
+    //    | Method              | Mean      | Error     | StdDev   | Gen0   | Allocated |
+    //|-------------------- |----------:|----------:|---------:|-------:|----------:|
+    //| SharpFluidupdatePT  | 26.635 us | 19.343 us | 1.060 us | 0.7629 |   3.26 KB |
+    //| EngineeringUpdatePT |  7.353 us | 32.568 us | 1.785 us | 0.9003 |   3.81 KB |
+
+
+    //No unit and more cache
+    //    | Method              | Mean        | Error       | StdDev    | Gen0   | Allocated |
+    //|-------------------- |------------:|------------:|----------:|-------:|----------:|
+    //| SharpFluidupdatePT  | 20,619.5 ns | 6,844.49 ns | 375.17 ns | 0.7629 |    3336 B |
+    //| EngineeringUpdatePT |    990.1 ns |    63.84 ns |   3.50 ns |      - |         - |
+
 
     [Benchmark]
     public void SharpFluidupdatePT()
@@ -58,7 +81,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdatePT()
     {
-        EngineeringFluid.UpdatePT(pressure, temperature);
+        EngineeringFluid.UpdatePT(pressured, temperatured);
     }
 
 

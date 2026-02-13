@@ -56,6 +56,26 @@ namespace EngineeringFluids.Helmholtz.Ancillary
 
         }
 
+        public static double CalculateDensityDouble(double temperature)
+        {
+
+            var temperatureAsDouble = temperature;
+
+            double THETA = 1.0 - temperatureAsDouble / Tr;
+            double summer = 0.0;
+
+            for (int i = 0; i < Coefficients.Count; i++)
+            {
+                summer += Coefficients[i] * Math.Pow(THETA, Exponents[i]);
+            }
+
+            //return reducingValue * Math.Exp(summer);
+
+            double result = reducingValue * Math.Exp(summer);
+            return result;
+
+        }
+
         public static Temperature CalculateTemperature(Molarity MolarDensity)
         {
 
