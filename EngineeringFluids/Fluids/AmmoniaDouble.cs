@@ -5,6 +5,8 @@ using EngineeringUnits;
 using EngineeringUnits.Units;
 using System;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 using static EngineeringFluids.Helmholtz.Phase;
 
 namespace EngineeringFluids.Fluids;
@@ -150,9 +152,11 @@ public class AmmoniaDouble
 
     public double Alpha0_dTau => alpha0_dTau(Delta, Tau);
     public double AlphaR_dDelta => alphaR_dDelta(Delta, Tau);
+    public double AlphaR_dDeltaFast => alphaR_dDeltaFast(Delta, Tau);
     public double AlphaR_dTau => alphaR_dTau(Delta, Tau);
 
     public double AlphaR_dDelta2 => alphaR_dDelta2(Delta, Tau);
+    public double AlphaR_dDelta2Fast => alphaR_dDelta2Fast(Delta, Tau);
 
     // ---------------------------
     // Density helpers (molar)
@@ -180,10 +184,25 @@ public class AmmoniaDouble
     {
         get
         {
-            EnsureSinglePhaseState();
-            double term = 1.0
-                + 2.0 * Delta * AlphaR_dDelta
-                + (Delta * Delta) * AlphaR_dDelta2;
+            //EnsureSinglePhaseState();
+
+            double delta = Delta;
+
+            double term = 1.0 + 2.0 * delta * AlphaR_dDelta + (delta * delta) * AlphaR_dDelta2;
+
+            return GasConstant * Temperature * term;
+        }
+    }
+
+    public double dp_drhomolar_constT_SIFast
+    {
+        get
+        {
+            //EnsureSinglePhaseState();
+
+            double delta = Delta;
+
+            double term = 1.0 + 2.0 * delta * AlphaR_dDeltaFast + (delta * delta) * AlphaR_dDelta2Fast;
 
             return GasConstant * Temperature * term;
         }
@@ -435,22 +454,39 @@ public class AmmoniaDouble
 
     //Cache
 
-    private static readonly ConcurrentDictionary<(double, double), double> CachealphaR_dDelta = new();
+    //private static readonly ConcurrentDictionary<(double, double), double> CachealphaR_dDelta = new();
     private static double alphaR_dDelta(double delta, double tau)
     {
-            var key = (delta, tau);
+            //var key = (delta, tau);
 
-            if (CachealphaR_dDelta.TryGetValue(key, out double local))
-                return local;
+           // if (CachealphaR_dDelta.TryGetValue(key, out double local))
+           //     return local;
 
 
         double result = ResidualHelmholtzPower.alphaR_dDelta(delta, tau) +
                ResidualHelmholtzGaussian.alphaR_dDelta(delta, tau) +
                ResidualHelmholtzGaoB.alphaR_dDelta(delta, tau);
 
-            _ = CachealphaR_dDelta.TryAdd(key, result);
+          //  _ = CachealphaR_dDelta.TryAdd(key, result);
 
             return result;
+
+    }
+    private static double alphaR_dDeltaFast(double delta, double tau)
+    {
+        //var key = (delta, tau);
+
+        // if (CachealphaR_dDelta.TryGetValue(key, out double local))
+        //     return local;
+
+
+        double result = ResidualHelmholtzPowerFast.alphaR_dDelta(delta, tau) +
+               ResidualHelmholtzGaussianFast.alphaR_dDelta(delta, tau) +
+               ResidualHelmholtzGaoBFast.alphaR_dDelta(delta, tau);
+
+        //  _ = CachealphaR_dDelta.TryAdd(key, result);
+
+        return result;
 
     }
 
@@ -462,175 +498,41 @@ public class AmmoniaDouble
     }
 
 
-    private static readonly ConcurrentDictionary<(double, double), double> CachealphaR_dDelta2 = new();
+    //private static readonly ConcurrentDictionary<(double, double), double> CachealphaR_dDelta2 = new();
     private static double alphaR_dDelta2(double delta, double tau)
     {
-        var key = (delta, tau);
+        //var key = (delta, tau);
 
-        if (CachealphaR_dDelta2.TryGetValue(key, out double local))
-            return local;
+        //if (CachealphaR_dDelta2.TryGetValue(key, out double local))
+         //   return local;
 
         double result = ResidualHelmholtzPower.alphaR_dDelta2(delta, tau) +
                ResidualHelmholtzGaussian.alphaR_dDelta2(delta, tau) +
                ResidualHelmholtzGaoB.alphaR_dDelta2(delta, tau);
 
 
-        _ = CachealphaR_dDelta2.TryAdd(key, result);
+       // _ = CachealphaR_dDelta2.TryAdd(key, result);
 
         return result;
     }
 
+    private static double alphaR_dDelta2Fast(double delta, double tau)
+    {
+        //var key = (delta, tau);
 
-    //// ---------------------------
-    //// Cached EOS terms (single-phase only)
-    //// ---------------------------
-    //[Flags]
-    //private enum EosMask : uint
-    //{
-    //    None = 0,
-    //    TauDelta = 1 << 0,
-    //    AlphaR_dDelta = 1 << 1,
-    //    AlphaR_dDelta2 = 1 << 2,
-    //    // optional later:
-    //    // AlphaR        = 1 << 3,
-    //    // Alpha0        = 1 << 4,
-    //    // Alpha0_dTau   = 1 << 5,
-    //    // AlphaR_dTau   = 1 << 6,
-    //}
+        //if (CachealphaR_dDelta2.TryGetValue(key, out double local))
+        //   return local;
 
-    //private struct EosCache
-    //{
-    //    public bool Valid;
-
-    //    // Cache key
-    //    public double T_K;          // numeric key only (no API change)
-    //    public double Rho_kgm3;     // numeric key only (no API change)
-
-    //    // Reduced variables
-    //    public double Tau;
-    //    public double Delta;
-
-    //    // Cached derivatives (dimensionless)
-    //    public double AlphaR_dDelta;
-    //    public double AlphaR_dDelta2;
-
-    //    public EosMask Mask;
-    //}
-
-    //private EosCache _eosCache;
-
-    //private void InvalidateEosCache()
-    //{
-    //    _eosCache.Valid = false;
-    //    _eosCache.Mask = EosMask.None;
-    //}
-
-    //private Temperature? _temperature;
-    //private Density? _density;
-
-    //public Temperature? Temperature
-    //{
-    //    get => _temperature;
-    //    set
-    //    {
-    //        _temperature = value;
-    //        InvalidateEosCache();
-    //    }
-    //}
-
-    //public Density? Density
-    //{
-    //    get => _density;
-    //    set
-    //    {
-    //        _density = value;
-    //        InvalidateEosCache();
-    //    }
-    //}
-
-    //private void EnsureEosCache(EosMask needed)
-    //{
-    //    EnsureSinglePhaseState(); // uses unit properties; OK
-
-    //    // Cache key values (numeric only for keying, not changing API)
-    //    double T_K = Temperature!.Kelvin;
-    //    double rho_kgm3 = Density!.KilogramPerCubicMeter;
-
-    //    // If state changed, reset cache
-    //    if (!_eosCache.Valid || _eosCache.T_K != T_K || _eosCache.Rho_kgm3 != rho_kgm3)
-    //    {
-    //        _eosCache = new EosCache
-    //        {
-    //            Valid = true,
-    //            T_K = T_K,
-    //            Rho_kgm3 = rho_kgm3,
-    //            Mask = EosMask.None
-    //        };
-    //    }
-
-    //    // tau/delta are needed for derivatives
-    //    if ((needed & EosMask.TauDelta) != 0 && (_eosCache.Mask & EosMask.TauDelta) == 0)
-    //    {
-    //        // Use your existing definitions to avoid changing semantics
-    //        _eosCache.Tau = Tau;
-    //        _eosCache.Delta = Delta;
-    //        _eosCache.Mask |= EosMask.TauDelta;
-    //    }
-
-    //    // alphar_dDelta
-    //    if ((needed & EosMask.AlphaR_dDelta) != 0 && (_eosCache.Mask & EosMask.AlphaR_dDelta) == 0)
-    //    {
-    //        EnsureEosCache(EosMask.TauDelta);
-
-    //        double delta = _eosCache.Delta;
-    //        double tau = _eosCache.Tau;
-
-    //        _eosCache.AlphaR_dDelta =
-    //            ResidualHelmholtzPower.alphaR_dDelta(delta, tau) +
-    //            ResidualHelmholtzGaussian.alphaR_dDelta(delta, tau) +
-    //            ResidualHelmholtzGaoB.alphaR_dDelta(delta, tau);
-
-    //        _eosCache.Mask |= EosMask.AlphaR_dDelta;
-    //    }
-
-    //    // alphar_dDelta2
-    //    if ((needed & EosMask.AlphaR_dDelta2) != 0 && (_eosCache.Mask & EosMask.AlphaR_dDelta2) == 0)
-    //    {
-    //        EnsureEosCache(EosMask.TauDelta);
-
-    //        double delta = _eosCache.Delta;
-    //        double tau = _eosCache.Tau;
-
-    //        _eosCache.AlphaR_dDelta2 =
-    //            ResidualHelmholtzPower.alphaR_dDelta2(delta, tau) +
-    //            ResidualHelmholtzGaussian.alphaR_dDelta2(delta, tau) +
-    //            ResidualHelmholtzGaoB.alphaR_dDelta2(delta, tau);
-
-    //        _eosCache.Mask |= EosMask.AlphaR_dDelta2;
-    //    }
+        double result = ResidualHelmholtzPowerFast.alphaR_dDelta2(delta, tau) +
+               ResidualHelmholtzGaussianFast.alphaR_dDelta2(delta, tau) +
+               ResidualHelmholtzGaoBFast.alphaR_dDelta2(delta, tau);
 
 
+        // _ = CachealphaR_dDelta2.TryAdd(key, result);
 
-    //}
+        return result;
+    }
 
-
-    //public double AlphaR_dDelta
-    //{
-    //    get
-    //    {
-    //        EnsureEosCache(EosMask.AlphaR_dDelta);
-    //        return _eosCache.AlphaR_dDelta;
-    //    }
-    //}
-
-    //public double AlphaR_dDelta2
-    //{
-    //    get
-    //    {
-    //        EnsureEosCache(EosMask.AlphaR_dDelta2);
-    //        return _eosCache.AlphaR_dDelta2;
-    //    }
-    //}
 
 
 }

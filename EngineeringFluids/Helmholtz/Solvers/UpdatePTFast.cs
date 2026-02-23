@@ -141,7 +141,11 @@ public static partial class Update
             return Phases.Supercritical;
 
         // Like CoolProp: near triple, phase determination is tricky; we still use psat(T) but keep a tight two-phase band. [1](https://coolprop.org/_static/doxygen/html/_helmholtz_e_o_s_mixture_backend_8cpp_source.html)
-        double psat = Saturation.CalculateSaturationPressureDouble(T);
+        //double psat = Saturation.CalculateSaturationPressureDouble(T);
+        //double psat = FastPressurePoly.Pressure((float)T);
+        double psat = SaturationPressureFast.Pressure((float)T);
+        
+
 
         // Two-phase ambiguity band. Start tight; widen slightly only if you see false positives.
         double rel = Math.Abs(p - psat) / Math.Max(psat, 1.0);
@@ -201,7 +205,8 @@ public static partial class Update
             // Use vapor ancillary if in range (fast)
             if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
             {
-                var rhoV = VaporDensity.CalculateDensityDouble(T);
+                var rhoVold = VaporDensity.CalculateDensityDouble(T);
+                var rhoV = DewDensityFast.Density((float)T);
                 if (rhoV != null && double.IsFinite(rhoV) && rhoV > 0)
                     return Math.Max(1e-12, Math.Min(rhoV, 10.0 * a.Critical.MolarDensity));
             }
@@ -213,7 +218,8 @@ public static partial class Update
             // Use liquid ancillary if in range (fast)
             if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
             {
-                var rhoL = LiquidDensity.CalculateDensityDouble(T);
+                var rhoLold = LiquidDensity.CalculateDensityDouble(T);
+                var rhoL = BubbleDensityFast.Density((float)T);
                 if (rhoL != null && double.IsFinite(rhoL) && rhoL > 0)
                     return Math.Max(1e-12, Math.Min(rhoL, 20.0 * a.Critical.MolarDensity));
             }
@@ -389,12 +395,16 @@ public static partial class Update
             if (Math.Abs(f) < tol)
                 return rho;
 
-            double dpdrho = a.dp_drhomolar_constT_SI; // analytic dp/drho|T (your formula is correct)
+            //double dpdrho = a.dp_drhomolar_constT_SI; // analytic dp/drho|T (your formula is correct)
+            double dpdrho = a.dp_drhomolar_constT_SIFast;
+
+
             if (!(dpdrho > 0) || !double.IsFinite(dpdrho))
                 break;
 
             // df/drho = (1/pTarget) * dpdrho
             double step = f / (dpdrho / pTarget);
+            step = double.Clamp(step, -500, 500);
             double rhoNew = rho - step;
 
             // If newton steps out of range, prepare a bracket and switch to fallback

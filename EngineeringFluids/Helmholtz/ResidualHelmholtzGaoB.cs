@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LitMath;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -33,6 +34,84 @@ public static class ResidualHelmholtzGaoB
         }
         return alphaRb;
     }
+
+
+
+
+    private const double b0 = 1.244, b1 = 0.6826;
+    private const double beta0 = 0.3696, beta1 = 0.2962;
+    private const double eps0 = 0.4478, eps1 = 0.44689;
+    private const double eta0 = -2.8452, eta1 = -2.8342;
+    private const double gam0 = 1.108, gam1 = 1.313;
+    private const double n0 = -1.6909858, n1 = 0.93739074;
+    private const double t0 = 4.3315, t1 = 4.015;
+
+
+    public static double alphaRFast(double delta, double tau)
+    {
+        // ---------------------------
+        // Delta side
+        // ---------------------------
+        double dd0 = delta - eps0;
+        double dd1 = delta - eps1;
+
+        double dd0Sq = dd0 * dd0;
+        double dd1Sq = dd1 * dd1;
+
+        // expDelta = exp(eta * dd^2)
+        // Use FMA form (eta*ddSq + 0) to encourage fused multiply-add instruction selection where applicable.
+        double expDelta0 = Math.Exp(Math.FusedMultiplyAdd(eta0, dd0Sq, 0.0));
+        double expDelta1 = Math.Exp(Math.FusedMultiplyAdd(eta1, dd1Sq, 0.0));
+
+        // We'll factor delta out later: final = delta * ( ... )
+        // So keep expDelta0/1 as-is.
+
+        // ---------------------------
+        // Tau side (Powless)
+        // ---------------------------
+        double dt0 = gam0 - tau;
+        double dt1 = gam1 - tau;
+
+        double dt0Sq = dt0 * dt0;
+        double dt1Sq = dt1 * dt1;
+
+        // denom = b + beta * dt^2  (FMA is ideal here)
+        double denom0 = Math.FusedMultiplyAdd(beta0, dt0Sq, b0);
+        double denom1 = Math.FusedMultiplyAdd(beta1, dt1Sq, b1);
+
+        // expTau = exp(1/denom)
+        double expTau0 = Math.Exp(1.0 / denom0);
+        double expTau1 = Math.Exp(1.0 / denom1);
+
+        // tau^t = exp(t * log(tau)) with one log
+        double logTau = Math.Log(tau);
+
+        double tauPow0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 0.0));
+        double tauPow1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 0.0));
+
+        // Ftau = tau^t * exp(1/denom)
+        double ftau0 = tauPow0 * expTau0;
+        double ftau1 = tauPow1 * expTau1;
+
+        // ---------------------------
+        // Final combine
+        // Original: (n0*ftau0*(delta*expDelta0)) + (n1*ftau1*(delta*expDelta1))
+        // Factor delta out:
+        //   delta * [ (n0*ftau0*expDelta0) + (n1*ftau1*expDelta1) ]
+        //
+        // Use FMA for the sum:
+        //   sum = FMA(n0*ftau0, expDelta0, (n1*ftau1*expDelta1))
+        // ---------------------------
+        double a0 = (n0 * ftau0);
+        double a1 = (n1 * ftau1);
+
+        double tail = a1 * expDelta1;
+        double sum = Math.FusedMultiplyAdd(a0, expDelta0, tail);
+
+        return delta * sum;
+    }
+
+
 
 
     public static double alphaR_dDelta(double delta, double tau)

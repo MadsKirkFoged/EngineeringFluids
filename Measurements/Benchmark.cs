@@ -4,6 +4,7 @@ using System.Numerics;
 using SharpFluids;
 using EngineeringFluids.Fluids;
 using EngineeringUnits;
+using EngineeringFluids.Helmholtz;
 
 namespace Benchmark;
 
@@ -70,6 +71,16 @@ public class Benchy
     //| SharpFluidupdatePT  | 20,619.5 ns | 6,844.49 ns | 375.17 ns | 0.7629 |    3336 B |
     //| EngineeringUpdatePT |    990.1 ns |    63.84 ns |   3.50 ns |      - |         - |
 
+//    | Method              | Mean     | Error    | StdDev   | Gen0   | Allocated |
+//|-------------------- |---------:|---------:|---------:|-------:|----------:|
+//| SharpFluidupdatePT  | 19.65 us | 4.600 us | 0.252 us | 0.7629 |    3336 B |
+//| EngineeringUpdatePT | 42.14 us | 2.017 us | 0.111 us |      - |         - |
+
+//    | Method              | Mean     | Error    | StdDev   | Gen0   | Allocated |
+//|-------------------- |---------:|---------:|---------:|-------:|----------:|
+//| SharpFluidupdatePT  | 19.57 us | 2.507 us | 0.137 us | 0.7629 |    3336 B |
+//| EngineeringUpdatePT | 18.92 us | 0.916 us | 0.050 us |      - |         - |
+
 
     [Benchmark]
     public void SharpFluidupdatePT()
@@ -83,6 +94,48 @@ public class Benchy
     {
         EngineeringFluid.UpdatePT(pressured, temperatured);
     }
+
+
+
+
+
+    //[Benchmark]
+    //public double CalculateSaturationPressureDouble()
+    //{
+    //    return Saturation.CalculateSaturationPressureDouble(373.15d);
+    //}
+
+    //[Benchmark]
+    //public float CalculateSaturationPressureFLoat()
+    //{
+    //    return Saturation.CalculateSaturationPressureFloat(373.15f);
+    //}
+
+    //[Benchmark]
+    //public float FastPressurePolytest()
+    //{
+    //    return FastPressurePoly.Pressure(373.15f);
+    //}
+
+    //[Benchmark]
+    //public float SaturationPressureFasttest()
+    //{
+    //    return SaturationPressureFast.Pressure(373.15f);
+    //}
+
+    //[Benchmark]
+    //public double Alpha0() => IdealHelmholtzPlanckEinstein.Alpha0(delta, tau);
+    //[Benchmark]
+    //public double Alpha0Fast() => IdealHelmholtzPlanckEinsteinFast.Alpha0(delta, tau);
+
+
+    //[Benchmark]
+    //public double Alpha0_dTau() => IdealHelmholtzPlanckEinstein.Alpha0_dTau(delta, tau);
+    //[Benchmark]
+    //public double Alpha0_dTauFast() => IdealHelmholtzPlanckEinsteinFast.Alpha0_dTau(delta, tau);
+
+
+
 
 
 

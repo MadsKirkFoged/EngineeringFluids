@@ -14,22 +14,22 @@ namespace EngineeringFluids.Helmholtz
         public static readonly double reducingValue = 11365000; // pc in Pa
         public static readonly double maxAbsErrorPercentage = 0.05181632089212851;
 
-        public static readonly List<double> Coefficients =
+        public static readonly List<float> Coefficients =
         [
-            -7.2257,
-            1.4263,
-            -0.59642,
-            -2.798,
-            -3.7869
+            -7.2257f,
+            1.4263f,
+            -0.59642f,
+            -2.798f,
+            -3.7869f
         ];
 
-        public static readonly List<double> Exponents =
+        public static readonly List<float> Exponents =
         [
-            1.0,
-            1.5,
-            2.0,
-            3.6,
-            15.5
+            1.0f,
+            1.5f,
+            2.0f,
+            3.6f,
+            15.5f
         ];
 
         public static Pressure CalculateSaturationPressure(Temperature temperature)
@@ -69,6 +69,29 @@ namespace EngineeringFluids.Helmholtz
             return result;
 
         }
+
+        public static float CalculateSaturationPressureFloat(float temperature)
+        {
+
+            float temperatureDouble = temperature;
+
+            float theta = 1.0f - temperatureDouble / (float)Tr;
+            float sum = 0.0f;
+
+            for (int i = 0; i < Coefficients.Count; i++)
+            {
+                sum += Coefficients[i] * MathF.Pow(theta, Exponents[i]);
+            }
+
+
+            float result = (float)reducingValue * MathF.Exp((float)Tr / temperatureDouble * sum);
+            return result;
+
+        }
+
+
+
+
 
         public static Temperature CalculateSaturationTemperature(Pressure Pressure)
         {
