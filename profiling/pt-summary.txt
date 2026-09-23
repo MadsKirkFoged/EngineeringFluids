@@ -1,0 +1,21 @@
+Trace duration (profile unit, likely ms): 20,250.55
+
+=== Top 8 by SELF time (where CPU actually was spent) ===
+   0.69%  UNMANAGED_CODE_TIME
+   0.00%  EngineeringFluids!Program.<Main>$(class System.String[])
+   0.00%  System.Private.CoreLib.il!System.Diagnostics.Tracing.EventSource.CreateManifestAndDescriptors(class System.Type,class System.String,class System.Diagnostics.Tracing.EventSource,value class System.Diagnostics.Tracing.EventManifestOptions)
+   0.00%  System.Private.CoreLib.il!System.Guid.ToString(class System.String,class System.IFormatProvider)
+   0.00%  System.Private.CoreLib.il!System.Diagnostics.Tracing.EtwEventProvider.TryReadRegistryFilterData(int32,value class System.Diagnostics.Tracing.ControllerCommand&,unsigned int8[]&)
+   0.00%  System.Private.CoreLib.il!System.Reflection.CustomAttribute.GetCustomAttributes(class System.Reflection.RuntimeModule,int32,int32,class System.RuntimeType)
+   0.00%  EngineeringFluids!Update.GuessRhoMolar(class EngineeringFluids.Fluids.AmmoniaDouble,float64,float64,value class Phases)
+   0.00%  System.Private.CoreLib.il!System.Diagnostics.Tracing.EventSource.Initialize(value class System.Guid,class System.String,class System.String[])
+
+=== Top 8 by TOTAL (inclusive) time ===
+  99.54%  EngineeringFluids!Program.<Main>$(class System.String[])
+  95.38%  System.Private.CoreLib.il!System.Threading.Thread.<PollGC>g__PollGCWorker|70_0()
+   3.27%  EngineeringFluids!Update.SolveRhoMolar_TP(class EngineeringFluids.Fluids.AmmoniaDouble,float64,float64,value class Phases,float64)
+   0.69%  UNMANAGED_CODE_TIME
+   0.32%  System.Private.CoreLib.il!System.Diagnostics.Tracing.EventSource.Initialize(value class System.Guid,class System.String,class System.String[])
+   0.32%  System.Private.CoreLib.il!System.Diagnostics.Tracing.NativeRuntimeEventSource..ctor()
+   0.32%  System.Private.CoreLib.il!System.Diagnostics.Tracing.NativeRuntimeEventSource..cctor()
+   0.32%  System.Private.CoreLib.il!System.Diagnostics.Tracing.EventSource.InitializeDefaultEventSources()

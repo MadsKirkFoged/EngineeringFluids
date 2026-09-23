@@ -182,6 +182,68 @@ public static class ResidualHelmholtzPowerFast
         return alphaR_dTau(delta, tau);
     }
 
+    // Fused first+second delta-derivative: the Newton solver needs both every
+    // iteration, and alphaR_dDelta + alphaR_dDelta2 each redundantly evaluate the
+    // same 10 Math.Exp calls (2 exp-damping + 8 tauPow) independently. This computes
+    // them once and reuses them for both derivatives. [benchmark-guided]
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public static void alphaR_dDelta_dDelta2(double delta, double tau, out double dDelta, out double dDelta2)
+    {
+        double logTau = Math.Log(tau);
+
+        double d1p = delta;
+        double d2p = delta * delta;
+        double d3p = d2p * delta;
+        double d4p = d2p * d2p;
+        double d5p = d4p * delta;
+
+        double expNegDelta = Math.Exp(-delta);
+        double expNegDelta2 = Math.Exp(-d2p);
+
+        double tauPow0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 0.0));
+        double tauPow1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 0.0));
+        double tauPow2 = Math.Exp(Math.FusedMultiplyAdd(t2, logTau, 0.0));
+        double tauPow3 = Math.Exp(Math.FusedMultiplyAdd(t3, logTau, 0.0));
+        double tauPow4 = Math.Exp(Math.FusedMultiplyAdd(t4, logTau, 0.0));
+        double tauPow5 = Math.Exp(Math.FusedMultiplyAdd(t5, logTau, 0.0));
+        double tauPow6 = Math.Exp(Math.FusedMultiplyAdd(t6, logTau, 0.0));
+        double tauPow7 = Math.Exp(Math.FusedMultiplyAdd(t7, logTau, 0.0));
+
+        // ---- first derivative ----
+        double g0 = (n0 * tauPow0) * (4.0 * d3p);
+        double g1 = (n1 * tauPow1) * 1.0;
+        double g2 = (n2 * tauPow2) * 1.0;
+        double g3 = (n3 * tauPow3) * (2.0 * d1p);
+        double g4 = (n4 * tauPow4) * (3.0 * d2p);
+
+        double inner5 = Math.FusedMultiplyAdd(-2.0, d4p, 3.0 * d2p);
+        double g5 = (n5 * tauPow5) * (expNegDelta2 * inner5);
+
+        double inner6 = Math.FusedMultiplyAdd(-2.0, d3p, 2.0 * d1p);
+        double g6 = (n6 * tauPow6) * (expNegDelta2 * inner6);
+
+        double inner7 = Math.FusedMultiplyAdd(-1.0, d3p, 3.0 * d2p);
+        double g7 = (n7 * tauPow7) * (expNegDelta * inner7);
+
+        dDelta = g0 + g1 + g2 + g3 + g4 + g5 + g6 + g7;
+
+        // ---- second derivative (reuses tauPow*/expNegDelta*/d*p above) ----
+        double s0 = (n0 * tauPow0) * (12.0 * d2p);
+        double s3 = (n3 * tauPow3) * 2.0;
+        double s4 = (n4 * tauPow4) * (6.0 * d1p);
+
+        double bracket5 = Math.FusedMultiplyAdd(4.0, d5p, Math.FusedMultiplyAdd(-14.0, d3p, 6.0 * d1p));
+        double s5 = (n5 * tauPow5) * (expNegDelta2 * bracket5);
+
+        double bracket6 = Math.FusedMultiplyAdd(4.0, d4p, (2.0 - 10.0 * d2p));
+        double s6 = (n6 * tauPow6) * (expNegDelta2 * bracket6);
+
+        double bracket7 = Math.FusedMultiplyAdd(1.0, d3p, (6.0 * d1p - 6.0 * d2p));
+        double s7 = (n7 * tauPow7) * (expNegDelta * bracket7);
+
+        dDelta2 = s0 + s3 + s4 + s5 + s6 + s7;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public static double alphaR_dDelta2(double delta, double tau)
     {

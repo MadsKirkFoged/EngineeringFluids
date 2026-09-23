@@ -25,13 +25,5 @@ public static class ExpClass
         test.CopyTo(result);
     }
 
-    public static void Log(Span<float> result)
-    {
-        Vector<float> v1 = new(result);
-
-        Vector256<float> v2 = v1.AsVector256();
-        Vector256<float> test = Vector256.Log(v2);
-
-        test.CopyTo(result);
-    }
+   
 }

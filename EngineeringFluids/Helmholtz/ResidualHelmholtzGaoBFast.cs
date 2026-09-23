@@ -216,6 +216,64 @@ public static class ResidualHelmholtzGaoBFast
     }
 
 
+    // Fused first+second delta-derivative: the Newton solver needs both every
+    // iteration, and alphaR_dDelta + alphaR_dDelta2 each redundantly evaluate the
+    // same tau-side (exp(1/denom), tau^t) and delta-side (exp(eta*dd^2)) exponentials
+    // independently. This computes them once and reuses them for both. [benchmark-guided]
+    public static void alphaR_dDelta_dDelta2(double delta, double tau, out double dDelta, out double dDelta2)
+    {
+        double logTau = Math.Log(tau);
+
+        // term 0 tau side
+        double dt0 = gam0 - tau;
+        double denom0 = Math.FusedMultiplyAdd(beta0, dt0 * dt0, b0);
+        double expTau0 = Math.Exp(1.0 / denom0);
+        double tauPow0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 0.0));
+        double Ftau0 = tauPow0 * expTau0;
+
+        // term 1 tau side
+        double dt1 = gam1 - tau;
+        double denom1 = Math.FusedMultiplyAdd(beta1, dt1 * dt1, b1);
+        double expTau1 = Math.Exp(1.0 / denom1);
+        double tauPow1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 0.0));
+        double Ftau1 = tauPow1 * expTau1;
+
+        // term 0 delta side
+        double dd0 = delta - eps0;
+        double dd0Sq = dd0 * dd0;
+        double expDelta0 = Math.Exp(Math.FusedMultiplyAdd(eta0, dd0Sq, 0.0));
+
+        // term 1 delta side
+        double dd1 = delta - eps1;
+        double dd1Sq = dd1 * dd1;
+        double expDelta1 = Math.Exp(Math.FusedMultiplyAdd(eta1, dd1Sq, 0.0));
+
+        // ---- first derivative ----
+        double k0 = (2.0 * eta0) * delta;
+        double mult0 = Math.FusedMultiplyAdd(k0, dd0, 1.0);
+
+        double k1 = (2.0 * eta1) * delta;
+        double mult1 = Math.FusedMultiplyAdd(k1, dd1, 1.0);
+
+        double p0 = (n0 * Ftau0) * expDelta0;
+        double p1 = (n1 * Ftau1) * expDelta1;
+
+        dDelta = Math.FusedMultiplyAdd(p0, mult0, p1 * mult1);
+
+        // ---- second derivative (reuses Ftau0/1, expDelta0/1, dd0/1) ----
+        double u10 = (2.0 * eta0) * dd0;
+        double u20 = 2.0 * eta0;
+        double bracket0 = Math.FusedMultiplyAdd(delta, (u20 + (u10 * u10)), 2.0 * u10);
+        double FdeltaPP0 = expDelta0 * bracket0;
+
+        double u11 = (2.0 * eta1) * dd1;
+        double u21 = 2.0 * eta1;
+        double bracket1 = Math.FusedMultiplyAdd(delta, (u21 + (u11 * u11)), 2.0 * u11);
+        double FdeltaPP1 = expDelta1 * bracket1;
+
+        dDelta2 = Math.FusedMultiplyAdd((n0 * Ftau0), FdeltaPP0, (n1 * Ftau1) * FdeltaPP1);
+    }
+
     public static double alphaR_dDelta2(double delta, double tau)
     {
         // tau must be > 0 for Log

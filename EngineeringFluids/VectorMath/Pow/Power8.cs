@@ -39,17 +39,7 @@ public static class Power8
 
     }
 
-    public static void Pow(Span<float> result, float power)
-    {
-        Vector256<float> tau = new Vector<float>(result).AsVector256();
 
-        var v1 = Vector256.Log(tau);
-        var v2 = Vector256.Multiply(v1, power);
-        var v3 = Vector256.Exp(v2);
-
-        v3.CopyTo(result);
-
-    }
 
     //  | PowFloat | 39.703 ns | 0.1254 ns | 0.1112 ns |         - |
     public static void Pow(Span<float> result, Span<float> power)
@@ -88,15 +78,7 @@ public static class Power8
     }
 
 
-    public static Span<float> Pow(float input, Span<int> power)
-    {
-        Span<float> result = new float[8];
-        result.Fill(input);
 
-        Pow(result, power);
-
-        return result;
-    }
 
 
 

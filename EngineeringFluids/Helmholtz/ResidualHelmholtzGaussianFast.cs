@@ -298,6 +298,96 @@ public static class ResidualHelmholtzGaussianFast
     }
 
     // ==========================
+    // alphaR_dDelta_dDelta2
+    // Fused first+second delta-derivative in one pass over the N terms.
+    // The Newton solver needs both every iteration; computing them separately
+    // (as alphaR_dDelta + alphaR_dDelta2) redundantly evaluates tauPow/expTerm
+    // (2 Math.Exp calls per term) twice. This halves that to 1 pass. [benchmark-guided]
+    // ==========================
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public static void alphaR_dDelta_dDelta2(double delta, double tau, out double dDelta, out double dDelta2)
+    {
+        double logTau = Math.Log(tau);
+
+        ref double betaRef = ref beta[0];
+        ref int dRef = ref dInt[0];
+        ref double epsRef = ref epsilon[0];
+        ref double etaRef = ref eta[0];
+        ref double gamRef = ref gamma[0];
+        ref double nRef = ref n[0];
+        ref double tRef = ref t[0];
+
+        double sum1 = 0.0;
+        double sum2 = 0.0;
+
+        for (int i = 0; i < N; i++)
+        {
+            double betai = Unsafe.Add(ref betaRef, i);
+            int di = Unsafe.Add(ref dRef, i);
+            double epsi = Unsafe.Add(ref epsRef, i);
+            double etai = Unsafe.Add(ref etaRef, i);
+            double gami = Unsafe.Add(ref gamRef, i);
+            double ni = Unsafe.Add(ref nRef, i);
+            double ti = Unsafe.Add(ref tRef, i);
+
+            double tauPow = TauPow(ti, logTau);
+
+            double dd = delta - epsi;
+            double tt = tau - gami;
+
+            // Computed ONCE and reused for both derivatives.
+            double expTerm = ExpGaussian(etai, dd, betai, tt);
+            double niTauPowExp = ni * tauPow * expTerm;
+
+            // --- first derivative wrt delta ---
+            double deltaPowDm1 = PowIntDeltaMinus1(delta, di);
+            double inner = Math.FusedMultiplyAdd(delta, (-2.0 * etai * dd), di);
+            sum1 += niTauPowExp * (deltaPowDm1 * inner);
+
+            // --- second derivative wrt delta ---
+            double g, gp, gpp;
+            switch (di)
+            {
+                case 1:
+                    g = delta;
+                    gp = 1.0;
+                    gpp = 0.0;
+                    break;
+
+                case 2:
+                    g = delta * delta;
+                    gp = 2.0 * delta;
+                    gpp = 2.0;
+                    break;
+
+                case 3:
+                    double d2 = delta * delta;
+                    g = d2 * delta;
+                    gp = 3.0 * d2;
+                    gpp = 6.0 * delta;
+                    break;
+
+                default:
+                    g = Math.Pow(delta, di);
+                    gp = (di == 0) ? 0.0 : di * Math.Pow(delta, di - 1);
+                    gpp = (di <= 1) ? 0.0 : di * (di - 1) * Math.Pow(delta, di - 2);
+                    break;
+            }
+
+            double u1 = (-2.0 * etai) * dd;
+            double u2 = -2.0 * etai;
+            double u1Sq = u1 * u1;
+            double tmp = u2 + u1Sq;
+            double bracket = gpp + (2.0 * gp * u1) + (g * tmp);
+
+            sum2 += niTauPowExp * bracket;
+        }
+
+        dDelta = sum1;
+        dDelta2 = sum2;
+    }
+
+    // ==========================
     // alphaR_dDelta2
     // second derivative w.r.t delta
     // Keeps your general formula, but with:

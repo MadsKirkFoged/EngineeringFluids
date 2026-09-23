@@ -247,7 +247,25 @@ public static partial class Update
         // Phase-aware bounds to avoid crossing branches
         if (phase == Phases.Gas)
         {
-            rhoMax = Math.Min(rhoMax, 0.95 * rhoRed);
+            // 0.95*rhoRed alone is only a tight bound near the critical point; far below Tc the
+            // real vapor branch tops out at the saturated-vapor (dew) density for this T, which can be
+            // orders of magnitude smaller. Without this, the solver can wander onto the spurious
+            // liquid-branch root of the (non-monotonic, sub-critical) p(rho) curve. [reported bug]
+            double gasBound = 0.95 * rhoRed;
+            double Tc = a.Critical.Temperature.Kelvin;
+            double Ttriple = a.TripleLiquid.Temperature.Kelvin;
+
+            if (T > Ttriple + 1e-6 && T < Tc - 1e-6)
+            {
+                var rhoDew = VaporDensity.CalculateDensity(Temperature.FromKelvin(T));
+                if (rhoDew != null && double.IsFinite(rhoDew.MolesPerCubicMeter) && rhoDew.MolesPerCubicMeter > 0)
+                {
+                    // Small safety factor tolerates ancillary/EOS mismatch right at the dome.
+                    gasBound = Math.Min(gasBound, 1.2 * rhoDew.MolesPerCubicMeter);
+                }
+            }
+
+            rhoMax = Math.Min(rhoMax, gasBound);
         }
         else if (phase == Phases.Liquid)
         {
@@ -366,7 +384,22 @@ public static partial class Update
         // Phase-aware bounds to avoid crossing branches
         if (phase == Phases.Gas)
         {
-            rhoMax = Math.Min(rhoMax, 0.95 * rhoRed);
+            // See the Ammonia overload above for why 0.95*rhoRed alone isn't enough far below Tc.
+            double gasBound = 0.95 * rhoRed;
+            double Tc = a.Critical.Temperature;
+            double Ttriple = a.TripleLiquid.Temperature;
+
+            if (T > Ttriple + 1e-6 && T < Tc - 1e-6)
+            {
+                double rhoDew = DewDensityFast.Density((float)T);
+                if (double.IsFinite(rhoDew) && rhoDew > 0)
+                {
+                    // Small safety factor tolerates ancillary/EOS mismatch right at the dome.
+                    gasBound = Math.Min(gasBound, 1.2 * rhoDew);
+                }
+            }
+
+            rhoMax = Math.Min(rhoMax, gasBound);
         }
         else if (phase == Phases.Liquid)
         {
@@ -378,6 +411,33 @@ public static partial class Update
         // Residual scaled by pTarget (CoolProp often uses scaled residuals in solver wrappers; see DP residual example). [1](https://coolprop.org/_static/doxygen/html/_helmholtz_e_o_s_mixture_backend_8cpp_source.html)
         static double Resid(double pEOS, double pTarget) => (pEOS - pTarget) / pTarget;
 
+        double TcLocal = a.Critical.Temperature;
+        double RGas = a.GasConstant;
+
+        // Fused (P, dP/drho) evaluation for the Newton loop. The loop needs both
+        // alphaR_dDelta and alphaR_dDelta2 every iteration; calling them as two
+        // independent Fast methods (as `a.Pressure` + `a.dp_drhomolar_constT_SIFast`
+        // used to) redundantly recomputes the same tauPow/exp terms twice per
+        // residual class. This evaluates each residual class exactly once per
+        // iteration and also skips mutating `a.Temperature`/`a.Density` every step
+        // (the caller sets the final state from the returned rho anyway). [benchmark-guided]
+        void EvalFast(double rho_, out double pEOS_, out double dpdrho_)
+        {
+            double tau = TcLocal / T;
+            double delta = rho_ / rhoRed;
+
+            ResidualHelmholtzPowerFast.alphaR_dDelta_dDelta2(delta, tau, out double p1, out double p2);
+            ResidualHelmholtzGaussianFast.alphaR_dDelta_dDelta2(delta, tau, out double g1, out double g2);
+            ResidualHelmholtzGaoBFast.alphaR_dDelta_dDelta2(delta, tau, out double b1, out double b2);
+
+            double dDelta = p1 + g1 + b1;
+            double dDelta2 = p2 + g2 + b2;
+
+            double RT = RGas * T;
+            pEOS_ = rho_ * RT * (1.0 + delta * dDelta);
+            dpdrho_ = RT * (1.0 + 2.0 * delta * dDelta + delta * delta * dDelta2);
+        }
+
         // Safeguarded Newton
         const int newtonIts = 20;
         const double tol = 1e-10;
@@ -388,16 +448,14 @@ public static partial class Update
 
         for (int i = 0; i < newtonIts; i++)
         {
-            SetState(a, T, rho);
-            double pEOS = a.Pressure;
+            EvalFast(rho, out double pEOS, out double dpdrho);
             double f = Resid(pEOS, pTarget);
 
             if (Math.Abs(f) < tol)
+            {
+                SetState(a, T, rho);
                 return rho;
-
-            //double dpdrho = a.dp_drhomolar_constT_SI; // analytic dp/drho|T (your formula is correct)
-            double dpdrho = a.dp_drhomolar_constT_SIFast;
-
+            }
 
             if (!(dpdrho > 0) || !double.IsFinite(dpdrho))
                 break;

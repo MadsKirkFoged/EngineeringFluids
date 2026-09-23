@@ -17,7 +17,7 @@ var test3 = SumSpan(floatArray1, floatArray2);
 
 //Speed();
 
-BenchmarkRunner.Run<Benchy>();
+//BenchmarkRunner.Run<Benchy>();
 
 
 
