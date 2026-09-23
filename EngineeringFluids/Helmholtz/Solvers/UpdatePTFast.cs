@@ -6,6 +6,7 @@ using static EngineeringFluids.Helmholtz.Phase;
 
 public static partial class Update
 {
+
     // Public API stays the same
     public static void UpdatePT(this Ammonia local, Pressure pTarget, Temperature t)
         => UpdatePTCore(local, pTarget, t, Phases.Unknown, strictHint: false);
@@ -205,22 +206,26 @@ public static partial class Update
 
         if (phase == Phases.Gas)
         {
-            // Use vapor ancillary if in range (fast)
-            if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
-            {
-                var rhoV = DewDensityFast.Density((float)T);
-                if (rhoV != null && double.IsFinite(rhoV) && rhoV > 0)
-                {
-                    rhoDewAncillary = rhoV;
-                    return Math.Max(1e-12, Math.Min(rhoV, 10.0 * a.Critical.MolarDensity));
-                }
-            }
+            // The dew-point ancillary density is only representative right at the
+            // saturation dome. Away from it - which is most of the vapor region - it can
+            // be many times denser than the true root, costing several extra Newton
+            // iterations to correct. A sweep over the full T/P range (see PR discussion)
+            // showed ideal gas alone matches or beats every dew-density-assisted variant
+            // on average Newton iteration count (~2.9 either way) while avoiding the
+            // ancillary lookups entirely, so it's used unconditionally here. The dew
+            // density is still looked up separately in SolveRhoMolar_TP, where it is
+            // load-bearing as a safety bound against crossing onto the liquid branch.
+            // [benchmark-guided]
             return rhoIdeal;
         }
 
         if (phase == Phases.Liquid)
         {
-            // Use liquid ancillary if in range (fast)
+            // Unlike vapor, liquid is nearly incompressible, so the bubble-point ancillary
+            // density stays a good guess far above Psat(T), not just at the dome. Confirmed
+            // by sweep: dropping it roughly doubles average Newton iterations and makes the
+            // solver fail outright on many points using the fallback guess alone.
+            // [benchmark-guided]
             if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
             {
                 var rhoL = BubbleDensityFast.Density((float)T);
@@ -454,6 +459,34 @@ public static partial class Update
             double RT = RGas * T;
             pEOS_ = rho_ * RT * (1.0 + delta * dDelta);
             dpdrho_ = RT * (1.0 + 2.0 * delta * dDelta + delta * delta * dDelta2);
+        }
+
+        // Supercritical spans orders of magnitude in density between low-P (near-ideal-gas)
+        // and high-P (liquid-like) states, and the single fixed guess (ideal gas, floored at
+        // 0.5x critical density) is only close for a narrow slice of that range - a sweep
+        // across the whole supercritical dome measured ~15 average Newton iterations as a
+        // result. Pressure is monotonic in density here (single branch, no dome ambiguity),
+        // so trying a handful of candidate densities spanning that range and starting Newton
+        // from whichever has the smallest residual is safe (can only pick a better start,
+        // never a wrong branch) and cut the average to ~7 Newton iterations plus the 5 trial
+        // evaluations (~12 total EOS evaluations vs ~15 before). [benchmark-guided]
+        if (phase == Phases.Supercritical)
+        {
+            Span<double> candidates = stackalloc double[] { rho, 0.15 * rhoRed, 0.5 * rhoRed, 1.5 * rhoRed, 4.0 * rhoRed };
+            double bestAbsF = double.PositiveInfinity;
+            double bestRho = rho;
+            foreach (double cand in candidates)
+            {
+                double c = Math.Clamp(cand, rhoMin, rhoMax);
+                EvalFast(c, out double pEOS, out _);
+                double absF = Math.Abs(Resid(pEOS, pTarget));
+                if (absF < bestAbsF)
+                {
+                    bestAbsF = absF;
+                    bestRho = c;
+                }
+            }
+            rho = bestRho;
         }
 
         // Safeguarded Newton
