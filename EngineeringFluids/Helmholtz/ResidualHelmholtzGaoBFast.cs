@@ -219,26 +219,24 @@ public static class ResidualHelmholtzGaoBFast
     // Ftau0/Ftau1 depend only on tau (i.e. only on temperature), which is fixed for the
     // whole density Newton solve at a given T - only delta changes between iterations.
     // Precomputing them once per solve (instead of once per iteration) removes 1 Log + 4 Exp
-    // calls from every Newton step. [benchmark-guided]
+    // calls from every Newton step. Each Ftau is tau^t * exp(1/denom) - since exp(a)*exp(b)
+    // = exp(a+b), that product is folded into a single Exp call per term instead of two,
+    // halving this cache's setup cost too. [benchmark-guided]
     public readonly struct TauCache
     {
         public readonly double Ftau0, Ftau1;
 
-        public TauCache(double tau)
-        {
-            double logTau = Math.Log(tau);
+        public TauCache(double tau) : this(tau, Math.Log(tau)) { }
 
+        public TauCache(double tau, double logTau)
+        {
             double dt0 = gam0 - tau;
             double denom0 = Math.FusedMultiplyAdd(beta0, dt0 * dt0, b0);
-            double expTau0 = Math.Exp(1.0 / denom0);
-            double tauPow0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 0.0));
-            Ftau0 = tauPow0 * expTau0;
+            Ftau0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 1.0 / denom0));
 
             double dt1 = gam1 - tau;
             double denom1 = Math.FusedMultiplyAdd(beta1, dt1 * dt1, b1);
-            double expTau1 = Math.Exp(1.0 / denom1);
-            double tauPow1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 0.0));
-            Ftau1 = tauPow1 * expTau1;
+            Ftau1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 1.0 / denom1));
         }
     }
 

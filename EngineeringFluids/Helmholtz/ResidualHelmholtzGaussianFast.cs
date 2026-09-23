@@ -308,16 +308,22 @@ public static class ResidualHelmholtzGaussianFast
     // delta changes between iterations. Precomputing both once per solve (instead of once per
     // iteration) removes 1 Log + 10 Exp calls from every Newton step; the combined
     // exp(-eta*dd^2-beta*tt^2) call becomes exp(-eta*dd^2) * (precomputed exp(-beta*tt^2)).
-    // [benchmark-guided]
+    //
+    // The two precomputed factors are themselves only ever used multiplied together
+    // (tau^t * exp(-beta*(tau-gamma)^2)), so exp(a)*exp(b) = exp(a+b) lets them be folded
+    // into ONE Exp call per term instead of two, halving this cache's setup cost (10 Exp
+    // instead of 20). This setup runs once per UpdatePT call regardless of how many Newton
+    // iterations follow, so it benefits every phase (gas/liquid/supercritical) equally -
+    // for the cheap gas/liquid cases (2-4 iterations) this setup was already the majority
+    // of the call's cost. [benchmark-guided]
     public readonly struct TauCache
     {
-        public readonly Buffer10 Pow;
-        public readonly Buffer10 ExpBeta;
+        public readonly Buffer10 Ftau;
 
-        public TauCache(double tau)
+        public TauCache(double tau) : this(tau, Math.Log(tau)) { }
+
+        public TauCache(double tau, double logTau)
         {
-            double logTau = Math.Log(tau);
-
             ref double betaRef = ref beta[0];
             ref double gamRef = ref gamma[0];
             ref double tRef = ref t[0];
@@ -328,10 +334,9 @@ public static class ResidualHelmholtzGaussianFast
                 double gami = Unsafe.Add(ref gamRef, i);
                 double ti = Unsafe.Add(ref tRef, i);
 
-                Pow[i] = TauPow(ti, logTau);
-
                 double tt = tau - gami;
-                ExpBeta[i] = Math.Exp(-(betai * tt * tt));
+                double exponent = Math.FusedMultiplyAdd(ti, logTau, -(betai * tt * tt));
+                Ftau[i] = Math.Exp(exponent);
             }
         }
     }
@@ -361,11 +366,10 @@ public static class ResidualHelmholtzGaussianFast
 
             double dd = delta - epsi;
 
-            // expTerm = exp(-eta*dd^2) * exp(-beta*(tau-gamma)^2); the second factor
-            // is precomputed and constant across this Newton solve.
+            // cache.Ftau[i] = tau^t * exp(-beta*(tau-gamma)^2), precomputed and constant
+            // across this Newton solve; only the delta-dependent factor is fresh here.
             double expEtaDelta = Math.Exp(-(etai * dd * dd));
-            double expTerm = expEtaDelta * cache.ExpBeta[i];
-            double niTauPowExp = ni * cache.Pow[i] * expTerm;
+            double niTauPowExp = ni * cache.Ftau[i] * expEtaDelta;
 
             // --- first derivative wrt delta ---
             double deltaPowDm1 = PowIntDeltaMinus1(delta, di);

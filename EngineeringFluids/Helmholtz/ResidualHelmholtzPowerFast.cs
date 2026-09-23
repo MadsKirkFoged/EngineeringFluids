@@ -194,13 +194,19 @@ public static class ResidualHelmholtzPowerFast
     {
         public readonly double p0, p1, p2, p3, p4, p5, p6, p7;
 
-        public TauCache(double tau)
+        public TauCache(double tau) : this(tau, Math.Log(tau)) { }
+
+        // logTau is the same value for every residual class's TauCache (they all share
+        // the same tau); computing it once in the caller instead of once per class saves
+        // 2 redundant Math.Log calls on every single UpdatePT call. [benchmark-guided]
+        public TauCache(double tau, double logTau)
         {
-            double logTau = Math.Log(tau);
-            p0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 0.0));
+            // t0, t2 and t3 are exactly 1.0, so tau^t is just tau - no Exp/Log round-trip
+            // needed (also more accurate than exp(log(tau)), not just faster).
+            p0 = tau;
             p1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 0.0));
-            p2 = Math.Exp(Math.FusedMultiplyAdd(t2, logTau, 0.0));
-            p3 = Math.Exp(Math.FusedMultiplyAdd(t3, logTau, 0.0));
+            p2 = tau;
+            p3 = tau;
             p4 = Math.Exp(Math.FusedMultiplyAdd(t4, logTau, 0.0));
             p5 = Math.Exp(Math.FusedMultiplyAdd(t5, logTau, 0.0));
             p6 = Math.Exp(Math.FusedMultiplyAdd(t6, logTau, 0.0));

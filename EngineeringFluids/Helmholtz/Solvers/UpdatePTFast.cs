@@ -433,10 +433,13 @@ public static partial class Update
         // iteration even though they never change; precomputing them once here removes
         // ~30 Math.Exp/Math.Log calls per Newton step (3 residual classes x up to 20
         // iterations otherwise). [benchmark-guided]
+        // logTau is likewise shared by all three caches below - computing it once here
+        // instead of once per cache constructor saves 2 redundant Math.Log calls per call.
         double tauFixed = TcLocal / T;
-        var powTauCache = new ResidualHelmholtzPowerFast.TauCache(tauFixed);
-        var gaussianTauCache = new ResidualHelmholtzGaussianFast.TauCache(tauFixed);
-        var gaoBTauCache = new ResidualHelmholtzGaoBFast.TauCache(tauFixed);
+        double logTauFixed = Math.Log(tauFixed);
+        var powTauCache = new ResidualHelmholtzPowerFast.TauCache(tauFixed, logTauFixed);
+        var gaussianTauCache = new ResidualHelmholtzGaussianFast.TauCache(tauFixed, logTauFixed);
+        var gaoBTauCache = new ResidualHelmholtzGaoBFast.TauCache(tauFixed, logTauFixed);
 
         // Fused (P, dP/drho) evaluation for the Newton loop. The loop needs both
         // alphaR_dDelta and alphaR_dDelta2 every iteration; calling them as two
