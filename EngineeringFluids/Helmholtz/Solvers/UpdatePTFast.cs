@@ -102,11 +102,12 @@ public static partial class Update
             }
         }
 
-        // Build a cheap density guess
-        double rhoGuess = GuessRhoMolar(local, T, p, phase);
+        // Build a cheap density guess (reusing the dew-density ancillary lookup, if any,
+        // instead of recomputing it inside SolveRhoMolar_TP for the gas-phase bound).
+        double rhoGuess = GuessRhoMolar(local, T, p, phase, out double rhoDewAncillary);
 
         // Solve for molar density
-        double rhomolar = SolveRhoMolar_TP(local, T, p, phase, rhoGuess);
+        double rhomolar = SolveRhoMolar_TP(local, T, p, phase, rhoGuess, rhoDewAncillary);
 
         // Set final state
         local.Density = rhomolar * local.MolarMass;
@@ -194,8 +195,10 @@ public static partial class Update
         return Math.Max(rhoIdeal, 0.5 * a.Critical.MolarDensity.MolesPerCubicMeter);
     }
 
-    private static double GuessRhoMolar(AmmoniaDouble a, double T, double p, Phases phase)
+    private static double GuessRhoMolar(AmmoniaDouble a, double T, double p, Phases phase, out double rhoDewAncillary)
     {
+        rhoDewAncillary = double.NaN;
+
         // Ideal gas is a robust guess for vapor/supercritical-gas-like states
         double rhoIdeal = p / (a.GasConstant * T);
         rhoIdeal = Math.Max(rhoIdeal, 1e-12);
@@ -205,10 +208,12 @@ public static partial class Update
             // Use vapor ancillary if in range (fast)
             if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
             {
-                var rhoVold = VaporDensity.CalculateDensityDouble(T);
                 var rhoV = DewDensityFast.Density((float)T);
                 if (rhoV != null && double.IsFinite(rhoV) && rhoV > 0)
+                {
+                    rhoDewAncillary = rhoV;
                     return Math.Max(1e-12, Math.Min(rhoV, 10.0 * a.Critical.MolarDensity));
+                }
             }
             return rhoIdeal;
         }
@@ -218,7 +223,6 @@ public static partial class Update
             // Use liquid ancillary if in range (fast)
             if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
             {
-                var rhoLold = LiquidDensity.CalculateDensityDouble(T);
                 var rhoL = BubbleDensityFast.Density((float)T);
                 if (rhoL != null && double.IsFinite(rhoL) && rhoL > 0)
                     return Math.Max(1e-12, Math.Min(rhoL, 20.0 * a.Critical.MolarDensity));
@@ -373,7 +377,7 @@ public static partial class Update
         }
     }
 
-    private static double SolveRhoMolar_TP(AmmoniaDouble a, double T, double pTarget, Phases phase, double rhoGuess)
+    private static double SolveRhoMolar_TP(AmmoniaDouble a, double T, double pTarget, Phases phase, double rhoGuess, double rhoDewAncillary = double.NaN)
     {
         double rhoRed = a.Critical.MolarDensity;
 
@@ -391,7 +395,11 @@ public static partial class Update
 
             if (T > Ttriple + 1e-6 && T < Tc - 1e-6)
             {
-                double rhoDew = DewDensityFast.Density((float)T);
+                // Reuse the dew density already computed by GuessRhoMolar for the initial
+                // guess instead of evaluating the same ancillary polynomial a second time.
+                double rhoDew = double.IsFinite(rhoDewAncillary) && rhoDewAncillary > 0
+                    ? rhoDewAncillary
+                    : DewDensityFast.Density((float)T);
                 if (double.IsFinite(rhoDew) && rhoDew > 0)
                 {
                     // Small safety factor tolerates ancillary/EOS mismatch right at the dome.
@@ -414,6 +422,17 @@ public static partial class Update
         double TcLocal = a.Critical.Temperature;
         double RGas = a.GasConstant;
 
+        // T (and hence tau = Tc/T) is fixed for this whole density solve - only delta
+        // (i.e. rho) changes between Newton iterations. Each residual class's tau^t /
+        // exp(-beta*(tau-gamma)^2) terms were previously recomputed from scratch on every
+        // iteration even though they never change; precomputing them once here removes
+        // ~30 Math.Exp/Math.Log calls per Newton step (3 residual classes x up to 20
+        // iterations otherwise). [benchmark-guided]
+        double tauFixed = TcLocal / T;
+        var powTauCache = new ResidualHelmholtzPowerFast.TauCache(tauFixed);
+        var gaussianTauCache = new ResidualHelmholtzGaussianFast.TauCache(tauFixed);
+        var gaoBTauCache = new ResidualHelmholtzGaoBFast.TauCache(tauFixed);
+
         // Fused (P, dP/drho) evaluation for the Newton loop. The loop needs both
         // alphaR_dDelta and alphaR_dDelta2 every iteration; calling them as two
         // independent Fast methods (as `a.Pressure` + `a.dp_drhomolar_constT_SIFast`
@@ -423,12 +442,11 @@ public static partial class Update
         // (the caller sets the final state from the returned rho anyway). [benchmark-guided]
         void EvalFast(double rho_, out double pEOS_, out double dpdrho_)
         {
-            double tau = TcLocal / T;
             double delta = rho_ / rhoRed;
 
-            ResidualHelmholtzPowerFast.alphaR_dDelta_dDelta2(delta, tau, out double p1, out double p2);
-            ResidualHelmholtzGaussianFast.alphaR_dDelta_dDelta2(delta, tau, out double g1, out double g2);
-            ResidualHelmholtzGaoBFast.alphaR_dDelta_dDelta2(delta, tau, out double b1, out double b2);
+            ResidualHelmholtzPowerFast.alphaR_dDelta_dDelta2(delta, in powTauCache, out double p1, out double p2);
+            ResidualHelmholtzGaussianFast.alphaR_dDelta_dDelta2(delta, in gaussianTauCache, out double g1, out double g2);
+            ResidualHelmholtzGaoBFast.alphaR_dDelta_dDelta2(delta, in gaoBTauCache, out double b1, out double b2);
 
             double dDelta = p1 + g1 + b1;
             double dDelta2 = p2 + g2 + b2;

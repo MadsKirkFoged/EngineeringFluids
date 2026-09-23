@@ -186,6 +186,77 @@ public static class ResidualHelmholtzPowerFast
     // iteration, and alphaR_dDelta + alphaR_dDelta2 each redundantly evaluate the
     // same 10 Math.Exp calls (2 exp-damping + 8 tauPow) independently. This computes
     // them once and reuses them for both derivatives. [benchmark-guided]
+    // Every tau^t power here depends only on tau (i.e. only on temperature), which is
+    // fixed for the whole density Newton solve at a given T — only delta changes between
+    // iterations. Precomputing these once per solve (instead of once per iteration) removes
+    // 1 Log + 8 Exp calls from every Newton step. [benchmark-guided]
+    public readonly struct TauCache
+    {
+        public readonly double p0, p1, p2, p3, p4, p5, p6, p7;
+
+        public TauCache(double tau)
+        {
+            double logTau = Math.Log(tau);
+            p0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 0.0));
+            p1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 0.0));
+            p2 = Math.Exp(Math.FusedMultiplyAdd(t2, logTau, 0.0));
+            p3 = Math.Exp(Math.FusedMultiplyAdd(t3, logTau, 0.0));
+            p4 = Math.Exp(Math.FusedMultiplyAdd(t4, logTau, 0.0));
+            p5 = Math.Exp(Math.FusedMultiplyAdd(t5, logTau, 0.0));
+            p6 = Math.Exp(Math.FusedMultiplyAdd(t6, logTau, 0.0));
+            p7 = Math.Exp(Math.FusedMultiplyAdd(t7, logTau, 0.0));
+        }
+    }
+
+    // Same fused first+second delta-derivative as below, but taking a precomputed
+    // TauCache instead of recomputing tau^t on every call (see TauCache remarks).
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public static void alphaR_dDelta_dDelta2(double delta, in TauCache c, out double dDelta, out double dDelta2)
+    {
+        double d1p = delta;
+        double d2p = delta * delta;
+        double d3p = d2p * delta;
+        double d4p = d2p * d2p;
+        double d5p = d4p * delta;
+
+        double expNegDelta = Math.Exp(-delta);
+        double expNegDelta2 = Math.Exp(-d2p);
+
+        // ---- first derivative ----
+        double g0 = (n0 * c.p0) * (4.0 * d3p);
+        double g1 = (n1 * c.p1) * 1.0;
+        double g2 = (n2 * c.p2) * 1.0;
+        double g3 = (n3 * c.p3) * (2.0 * d1p);
+        double g4 = (n4 * c.p4) * (3.0 * d2p);
+
+        double inner5 = Math.FusedMultiplyAdd(-2.0, d4p, 3.0 * d2p);
+        double g5 = (n5 * c.p5) * (expNegDelta2 * inner5);
+
+        double inner6 = Math.FusedMultiplyAdd(-2.0, d3p, 2.0 * d1p);
+        double g6 = (n6 * c.p6) * (expNegDelta2 * inner6);
+
+        double inner7 = Math.FusedMultiplyAdd(-1.0, d3p, 3.0 * d2p);
+        double g7 = (n7 * c.p7) * (expNegDelta * inner7);
+
+        dDelta = g0 + g1 + g2 + g3 + g4 + g5 + g6 + g7;
+
+        // ---- second derivative (reuses c.p*/expNegDelta*/d*p above) ----
+        double s0 = (n0 * c.p0) * (12.0 * d2p);
+        double s3 = (n3 * c.p3) * 2.0;
+        double s4 = (n4 * c.p4) * (6.0 * d1p);
+
+        double bracket5 = Math.FusedMultiplyAdd(4.0, d5p, Math.FusedMultiplyAdd(-14.0, d3p, 6.0 * d1p));
+        double s5 = (n5 * c.p5) * (expNegDelta2 * bracket5);
+
+        double bracket6 = Math.FusedMultiplyAdd(4.0, d4p, (2.0 - 10.0 * d2p));
+        double s6 = (n6 * c.p6) * (expNegDelta2 * bracket6);
+
+        double bracket7 = Math.FusedMultiplyAdd(1.0, d3p, (6.0 * d1p - 6.0 * d2p));
+        double s7 = (n7 * c.p7) * (expNegDelta * bracket7);
+
+        dDelta2 = s0 + s3 + s4 + s5 + s6 + s7;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public static void alphaR_dDelta_dDelta2(double delta, double tau, out double dDelta, out double dDelta2)
     {

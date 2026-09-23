@@ -297,6 +297,124 @@ public static class ResidualHelmholtzGaussianFast
         return sum;
     }
 
+    [System.Runtime.CompilerServices.InlineArray(N)]
+    public struct Buffer10
+    {
+        private double _e0;
+    }
+
+    // Every term's tau^t and exp(-beta*(tau-gamma)^2) factor depends only on tau (i.e. only
+    // on temperature), which is fixed for the whole density Newton solve at a given T - only
+    // delta changes between iterations. Precomputing both once per solve (instead of once per
+    // iteration) removes 1 Log + 10 Exp calls from every Newton step; the combined
+    // exp(-eta*dd^2-beta*tt^2) call becomes exp(-eta*dd^2) * (precomputed exp(-beta*tt^2)).
+    // [benchmark-guided]
+    public readonly struct TauCache
+    {
+        public readonly Buffer10 Pow;
+        public readonly Buffer10 ExpBeta;
+
+        public TauCache(double tau)
+        {
+            double logTau = Math.Log(tau);
+
+            ref double betaRef = ref beta[0];
+            ref double gamRef = ref gamma[0];
+            ref double tRef = ref t[0];
+
+            for (int i = 0; i < N; i++)
+            {
+                double betai = Unsafe.Add(ref betaRef, i);
+                double gami = Unsafe.Add(ref gamRef, i);
+                double ti = Unsafe.Add(ref tRef, i);
+
+                Pow[i] = TauPow(ti, logTau);
+
+                double tt = tau - gami;
+                ExpBeta[i] = Math.Exp(-(betai * tt * tt));
+            }
+        }
+    }
+
+    // ==========================
+    // alphaR_dDelta_dDelta2 (precomputed TauCache overload)
+    // Same fused first+second delta-derivative as below, but only recomputes the
+    // delta-dependent exponential each iteration (see TauCache remarks).
+    // ==========================
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public static void alphaR_dDelta_dDelta2(double delta, in TauCache cache, out double dDelta, out double dDelta2)
+    {
+        ref int dRef = ref dInt[0];
+        ref double epsRef = ref epsilon[0];
+        ref double etaRef = ref eta[0];
+        ref double nRef = ref n[0];
+
+        double sum1 = 0.0;
+        double sum2 = 0.0;
+
+        for (int i = 0; i < N; i++)
+        {
+            int di = Unsafe.Add(ref dRef, i);
+            double epsi = Unsafe.Add(ref epsRef, i);
+            double etai = Unsafe.Add(ref etaRef, i);
+            double ni = Unsafe.Add(ref nRef, i);
+
+            double dd = delta - epsi;
+
+            // expTerm = exp(-eta*dd^2) * exp(-beta*(tau-gamma)^2); the second factor
+            // is precomputed and constant across this Newton solve.
+            double expEtaDelta = Math.Exp(-(etai * dd * dd));
+            double expTerm = expEtaDelta * cache.ExpBeta[i];
+            double niTauPowExp = ni * cache.Pow[i] * expTerm;
+
+            // --- first derivative wrt delta ---
+            double deltaPowDm1 = PowIntDeltaMinus1(delta, di);
+            double inner = Math.FusedMultiplyAdd(delta, (-2.0 * etai * dd), di);
+            sum1 += niTauPowExp * (deltaPowDm1 * inner);
+
+            // --- second derivative wrt delta ---
+            double g, gp, gpp;
+            switch (di)
+            {
+                case 1:
+                    g = delta;
+                    gp = 1.0;
+                    gpp = 0.0;
+                    break;
+
+                case 2:
+                    g = delta * delta;
+                    gp = 2.0 * delta;
+                    gpp = 2.0;
+                    break;
+
+                case 3:
+                    double d2 = delta * delta;
+                    g = d2 * delta;
+                    gp = 3.0 * d2;
+                    gpp = 6.0 * delta;
+                    break;
+
+                default:
+                    g = Math.Pow(delta, di);
+                    gp = (di == 0) ? 0.0 : di * Math.Pow(delta, di - 1);
+                    gpp = (di <= 1) ? 0.0 : di * (di - 1) * Math.Pow(delta, di - 2);
+                    break;
+            }
+
+            double u1 = (-2.0 * etai) * dd;
+            double u2 = -2.0 * etai;
+            double u1Sq = u1 * u1;
+            double tmp = u2 + u1Sq;
+            double bracket = gpp + (2.0 * gp * u1) + (g * tmp);
+
+            sum2 += niTauPowExp * bracket;
+        }
+
+        dDelta = sum1;
+        dDelta2 = sum2;
+    }
+
     // ==========================
     // alphaR_dDelta_dDelta2
     // Fused first+second delta-derivative in one pass over the N terms.
