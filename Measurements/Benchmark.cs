@@ -16,7 +16,7 @@ public class Benchy
     private static readonly double temperatured = 373.15; // Temperature.FromDegreeCelsius(100).SI;
 
     private static readonly Fluid SharpFluid = new Fluid(FluidList.Ammonia);
-    private static readonly AmmoniaDouble EngineeringFluid = new AmmoniaDouble();
+    private static readonly Ammonia EngineeringFluid = new Ammonia();
     private static readonly AbstractState CoolPropState = AbstractState.factory("HEOS", "Ammonia");
 
     [Benchmark]
@@ -39,14 +39,14 @@ public class Benchy
 
     // ---------------------------------------------------------------------
     // UpdatePX (pressure + vapor-quality flash): same three-way comparison as UpdatePT
-    // above, at one representative two-phase point. Unlike UpdatePT, the Fast UpdatePX
+    // above, at one representative two-phase point. Unlike UpdatePT, the UpdatePX
     // path has no Newton iteration (it reads Tsat/rhoL/rhoV straight from fixed-cost
-    // ancillary polynomials - see UpdatePXFast.cs), so its cost doesn't vary by region
+    // ancillary polynomials - see UpdatePX.cs), so its cost doesn't vary by region
     // the way UpdatePT's does; one point is enough to characterize it.
     // ---------------------------------------------------------------------
 
     private static readonly Fluid SharpFluidPX = new Fluid(FluidList.Ammonia);
-    private static readonly AmmoniaDouble EngineeringFluidPX = new AmmoniaDouble();
+    private static readonly Ammonia EngineeringFluidPX = new Ammonia();
     private static readonly AbstractState CoolPropStatePX = AbstractState.factory("HEOS", "Ammonia");
 
     private static readonly Pressure pxPressure = Pressure.FromPascal(1_000_000);
@@ -73,15 +73,15 @@ public class Benchy
 
     // ---------------------------------------------------------------------
     // UpdatePH (pressure + enthalpy flash): same three-way comparison, at both a single-phase
-    // point and a two-phase point. Unlike UpdatePX, the Fast UpdatePH path's cost genuinely
+    // point and a two-phase point. Unlike UpdatePX, the UpdatePH path's cost genuinely
     // varies by case: the two-phase branch is an O(1) ancillary lookup (same class as UpdatePX),
     // but the single-phase branch runs an outer temperature root-find with UpdatePT as the
-    // inner evaluator (see UpdatePHFast.cs), so it costs several UpdatePT-and-property-read
+    // inner evaluator (see UpdatePH.cs), so it costs several UpdatePT-and-property-read
     // iterations rather than one lookup.
     // ---------------------------------------------------------------------
 
     private static readonly Fluid SharpFluidPH = new Fluid(FluidList.Ammonia);
-    private static readonly AmmoniaDouble EngineeringFluidPH = new AmmoniaDouble();
+    private static readonly Ammonia EngineeringFluidPH = new Ammonia();
     private static readonly AbstractState CoolPropStatePH = AbstractState.factory("HEOS", "Ammonia");
 
     private static readonly Pressure phPressure = Pressure.FromPascal(2_100_000);
@@ -90,7 +90,7 @@ public class Benchy
     private static readonly double phEnthalpyd = 1_792_554.16228943;
 
     private static readonly Fluid SharpFluidPH2P = new Fluid(FluidList.Ammonia);
-    private static readonly AmmoniaDouble EngineeringFluidPH2P = new AmmoniaDouble();
+    private static readonly Ammonia EngineeringFluidPH2P = new Ammonia();
     private static readonly AbstractState CoolPropStatePH2P = AbstractState.factory("HEOS", "Ammonia");
 
     private static readonly Pressure ph2pPressure = Pressure.FromPascal(1_000_000);
@@ -137,13 +137,13 @@ public class Benchy
     // ---------------------------------------------------------------------
     // UpdatePS (pressure + entropy flash): same three-way comparison and cost shape as
     // UpdatePH above (two-phase is an O(1) ancillary lookup, single-phase is a warm-started
-    // outer temperature root-find - see UpdatePSFast.cs). Uses the SAME physical states as
+    // outer temperature root-find - see UpdatePS.cs). Uses the SAME physical states as
     // the UpdatePH benchmarks (P=2.1MPa gas / P=1MPa q=0.5 mixture), just entropy instead of
     // enthalpy as the second input, so the two sets of numbers are directly comparable.
     // ---------------------------------------------------------------------
 
     private static readonly Fluid SharpFluidPS = new Fluid(FluidList.Ammonia);
-    private static readonly AmmoniaDouble EngineeringFluidPS = new AmmoniaDouble();
+    private static readonly Ammonia EngineeringFluidPS = new Ammonia();
     private static readonly AbstractState CoolPropStatePS = AbstractState.factory("HEOS", "Ammonia");
 
     private static readonly Pressure psPressure = Pressure.FromPascal(2_100_000);
@@ -152,7 +152,7 @@ public class Benchy
     private static readonly double psEntropyd = psEntropy.JoulePerKilogramKelvin;
 
     private static readonly Fluid SharpFluidPS2P = new Fluid(FluidList.Ammonia);
-    private static readonly AmmoniaDouble EngineeringFluidPS2P = new AmmoniaDouble();
+    private static readonly Ammonia EngineeringFluidPS2P = new Ammonia();
     private static readonly AbstractState CoolPropStatePS2P = AbstractState.factory("HEOS", "Ammonia");
 
     private static readonly Pressure ps2pPressure = Pressure.FromPascal(1_000_000);
@@ -213,12 +213,12 @@ public class Benchy
     // ---------------------------------------------------------------------
     // UpdateTX (temperature + vapor-quality flash): even cheaper than UpdatePX - T is already
     // the ancillaries' independent variable, so there's no P->T inversion at all (see
-    // UpdateTXFast.cs). Uses SharpFluids' own UpdateXT naming (quality, T) - that's the only
+    // UpdateTX.cs). Uses SharpFluids' own UpdateXT naming (quality, T) - that's the only
     // signature the package exposes.
     // ---------------------------------------------------------------------
 
     private static readonly Fluid SharpFluidTX = new Fluid(FluidList.Ammonia);
-    private static readonly AmmoniaDouble EngineeringFluidTX = new AmmoniaDouble();
+    private static readonly Ammonia EngineeringFluidTX = new Ammonia();
     private static readonly AbstractState CoolPropStateTX = AbstractState.factory("HEOS", "Ammonia");
 
     private static readonly Temperature txTemperature = Temperature.FromKelvin(280.0);
@@ -245,12 +245,12 @@ public class Benchy
 
     // ---------------------------------------------------------------------
     // UpdateTXExact: same operation as UpdateTX above, but solving the real phase-equilibrium
-    // conditions against the EOS (SolveAtTFast) instead of reading the pre-fitted ancillary
+    // conditions against the EOS (SolveAtT) instead of reading the pre-fitted ancillary
     // curves - see UpdateTXExact.cs. Same physical state as the UpdateTX benchmark, so the two
     // are directly comparable: this is the accuracy/speed tradeoff for the exact version.
     // ---------------------------------------------------------------------
 
-    private static readonly AmmoniaDouble EngineeringFluidTXExact = new AmmoniaDouble();
+    private static readonly Ammonia EngineeringFluidTXExact = new Ammonia();
 
     [Benchmark]
     public void EngineeringUpdateTXExact()
@@ -259,7 +259,7 @@ public class Benchy
     }
 
     // ---------------------------------------------------------------------
-    // Region-specific cases for the Fast (AmmoniaDouble) path only.
+    // Region-specific UpdatePT cases.
     //
     // UpdatePT's Newton solver needs a different number of iterations depending
     // on where (T,P) falls relative to the saturation dome and the critical
@@ -272,42 +272,42 @@ public class Benchy
     // invisible there. These cases give each region its own tracked number.
     // ---------------------------------------------------------------------
 
-    private static readonly AmmoniaDouble GasNearDomeFluid = new AmmoniaDouble();
+    private static readonly Ammonia GasNearDomeFluid = new Ammonia();
     private static readonly double gasNearDomePressure = 5_630_000; // ~0.9x Psat(373.15K): gas, close to the dew line
     private static readonly double gasNearDomeTemperature = 373.15;
 
-    private static readonly AmmoniaDouble LiquidFluid = new AmmoniaDouble();
+    private static readonly Ammonia LiquidFluid = new Ammonia();
     private static readonly double liquidPressure = 2_100_000;
     private static readonly double liquidTemperature = 280.0; // subcooled liquid
 
-    private static readonly AmmoniaDouble SupercriticalTypicalFluid = new AmmoniaDouble();
+    private static readonly Ammonia SupercriticalTypicalFluid = new Ammonia();
     private static readonly double supercriticalTypicalPressure = 15_000_000; // ~1.3x Pc, comfortably away from Tc
     private static readonly double supercriticalTypicalTemperature = 500.0;
 
-    private static readonly AmmoniaDouble SupercriticalNearCriticalFluid = new AmmoniaDouble();
+    private static readonly Ammonia SupercriticalNearCriticalFluid = new Ammonia();
     private static readonly double supercriticalNearCriticalPressure = 14_158_915.68768298; // worst case found while sweeping the supercritical region
     private static readonly double supercriticalNearCriticalTemperature = 406.56; // 1 K above Tc=405.56K
 
     [Benchmark]
-    public void Gas_NearDome_Fast()
+    public void Gas_NearDome()
     {
         GasNearDomeFluid.UpdatePT(gasNearDomePressure, gasNearDomeTemperature);
     }
 
     [Benchmark]
-    public void Liquid_Fast()
+    public void Liquid()
     {
         LiquidFluid.UpdatePT(liquidPressure, liquidTemperature);
     }
 
     [Benchmark]
-    public void Supercritical_Typical_Fast()
+    public void Supercritical_Typical()
     {
         SupercriticalTypicalFluid.UpdatePT(supercriticalTypicalPressure, supercriticalTypicalTemperature);
     }
 
     [Benchmark]
-    public void Supercritical_NearCritical_Fast()
+    public void Supercritical_NearCritical()
     {
         SupercriticalNearCriticalFluid.UpdatePT(supercriticalNearCriticalPressure, supercriticalNearCriticalTemperature);
     }

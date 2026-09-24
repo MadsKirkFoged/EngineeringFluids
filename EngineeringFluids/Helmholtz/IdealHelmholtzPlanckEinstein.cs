@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace EngineeringFluids.Helmholtz;
 
-public static class IdealHelmholtzPlanckEinsteinFast
+public static class IdealHelmholtzPlanckEinstein
 {
     // Original coefficients as scalars (avoid arrays + indexing)
     private const double n0 = 2.224;
@@ -86,7 +86,7 @@ public static class IdealHelmholtzPlanckEinsteinFast
     }
 
     // ----------------------------
-    // Fast API
+    // Public API
     // ----------------------------
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]

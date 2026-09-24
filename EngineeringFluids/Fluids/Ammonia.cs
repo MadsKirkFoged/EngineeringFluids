@@ -5,7 +5,7 @@ using static EngineeringFluids.Helmholtz.Phase;
 
 namespace EngineeringFluids.Fluids;
 
-public class AmmoniaDouble
+public class Ammonia
 {
     // ---------------------------
     // Primary state (single-phase)
@@ -16,7 +16,7 @@ public class AmmoniaDouble
     // ---------------------------
     // Fixed reference points
     // ---------------------------
-    public readonly SpecificPointdouble Critical = new SpecificPointdouble()
+    public readonly SpecificPoint Critical = new SpecificPoint()
     {
         Temperature = 405.56,
         MolarEnthalpy = 21501.16668203028,
@@ -25,7 +25,7 @@ public class AmmoniaDouble
         MolarEntropy = 68.56438502935785
     };
 
-    public readonly SpecificPointdouble TripleLiquid = new SpecificPointdouble()
+    public readonly SpecificPoint TripleLiquid = new SpecificPoint()
     {
         Temperature = 195.495,
         MolarEnthalpy = 0.14111811220522047,
@@ -34,7 +34,7 @@ public class AmmoniaDouble
         MolarEntropy = -1.9440525067083775e-06
     };
 
-    public readonly SpecificPointdouble TripleVapor = new SpecificPointdouble()
+    public readonly SpecificPoint TripleVapor = new SpecificPoint()
     {
         Temperature = 195.495,
         MolarEnthalpy = 25279.492873914965,
@@ -51,9 +51,9 @@ public class AmmoniaDouble
     // ---------------------------
     private bool _isTwoPhase;
     private double _quality; // mass quality in [0,1]
-    private SaturationSolver.SatResultDouble? _satCache;
+    private SaturationSolver.SatResult? _satCache;
 
-    public void SetTwoPhase(SaturationSolver.SatResultDouble sat, double q)
+    public void SetTwoPhase(SaturationSolver.SatResult sat, double q)
     {
         if (q < 0 || q > 1)
             throw new ArgumentOutOfRangeException(nameof(q), "Quality must be in [0,1].");
@@ -81,22 +81,22 @@ public class AmmoniaDouble
         _satCache = null;
     }
 
-    private AmmoniaDouble SatLiquidState()
+    private Ammonia SatLiquidState()
     {
         if (_satCache == null)
             throw new InvalidOperationException("Two-phase state missing saturation cache.");
-        return new AmmoniaDouble
+        return new Ammonia
         {
             Temperature = _satCache.T,
             Density = _satCache.RhomolarL * MolarMass
         };
     }
 
-    private AmmoniaDouble SatVaporState()
+    private Ammonia SatVaporState()
     {
         if (_satCache == null)
             throw new InvalidOperationException("Two-phase state missing saturation cache.");
-        return new AmmoniaDouble
+        return new Ammonia
         {
             Temperature = _satCache.T,
             Density = _satCache.RhomolarV * MolarMass
@@ -258,7 +258,7 @@ public class AmmoniaDouble
             // Simple classification based on saturation pressure for subcritical
             if (Temperature < Critical.Temperature)
             {
-                double psat = SaturationPressureFast.Pressure((float)Temperature);
+                double psat = SaturationPressure.Pressure((float)Temperature);
                 double p = Pressure;
 
                 if (p > psat)
@@ -281,41 +281,41 @@ public class AmmoniaDouble
     {
         return IdealGasHelmholtzLead.Alpha0(delta, tau) +
                IdealHelmholtzLogTau.Alpha0(delta, tau) +
-               IdealHelmholtzPlanckEinsteinFast.Alpha0(delta, tau);
+               IdealHelmholtzPlanckEinstein.Alpha0(delta, tau);
     }
 
     private static double alpha0_dTau(double delta, double tau)
     {
         return IdealGasHelmholtzLead.Alpha0_dTau(delta, tau) +
                IdealHelmholtzLogTau.Alpha0_dTau(delta, tau) +
-               IdealHelmholtzPlanckEinsteinFast.Alpha0_dTau(delta, tau);
+               IdealHelmholtzPlanckEinstein.Alpha0_dTau(delta, tau);
     }
 
     private static double alphaR(double delta, double tau)
     {
-        return ResidualHelmholtzPowerFast.alphaR(delta, tau) +
-               ResidualHelmholtzGaussianFast.alphaR(delta, tau) +
-               ResidualHelmholtzGaoBFast.alphaR(delta, tau);
+        return ResidualHelmholtzPower.alphaR(delta, tau) +
+               ResidualHelmholtzGaussian.alphaR(delta, tau) +
+               ResidualHelmholtzGaoB.alphaR(delta, tau);
     }
 
     private static double alphaR_dDelta(double delta, double tau)
     {
-        return ResidualHelmholtzPowerFast.alphaR_dDelta(delta, tau) +
-               ResidualHelmholtzGaussianFast.alphaR_dDelta(delta, tau) +
-               ResidualHelmholtzGaoBFast.alphaR_dDelta(delta, tau);
+        return ResidualHelmholtzPower.alphaR_dDelta(delta, tau) +
+               ResidualHelmholtzGaussian.alphaR_dDelta(delta, tau) +
+               ResidualHelmholtzGaoB.alphaR_dDelta(delta, tau);
     }
 
     private static double alphaR_dTau(double delta, double tau)
     {
-        return ResidualHelmholtzPowerFast.alphaR_dTau(delta, tau) +
-               ResidualHelmholtzGaussianFast.alphaR_dTau(delta, tau) +
-               ResidualHelmholtzGaoBFast.alphaR_dTau(delta, tau);
+        return ResidualHelmholtzPower.alphaR_dTau(delta, tau) +
+               ResidualHelmholtzGaussian.alphaR_dTau(delta, tau) +
+               ResidualHelmholtzGaoB.alphaR_dTau(delta, tau);
     }
 
     private static double alphaR_dDelta2(double delta, double tau)
     {
-        return ResidualHelmholtzPowerFast.alphaR_dDelta2(delta, tau) +
-               ResidualHelmholtzGaussianFast.alphaR_dDelta2(delta, tau) +
-               ResidualHelmholtzGaoBFast.alphaR_dDelta2(delta, tau);
+        return ResidualHelmholtzPower.alphaR_dDelta2(delta, tau) +
+               ResidualHelmholtzGaussian.alphaR_dDelta2(delta, tau) +
+               ResidualHelmholtzGaoB.alphaR_dDelta2(delta, tau);
     }
 }

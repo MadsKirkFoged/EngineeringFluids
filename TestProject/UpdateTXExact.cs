@@ -7,8 +7,8 @@ using System.Collections.Generic;
 
 namespace TestProject;
 
-// Exact (EOS-based) UpdateTX: unlike CoolPropOracle_UpdateTX_FastTests, this does not need to
-// exclude a wide band near Tc/the triple point, since SolveAtTFast solves the real
+// Exact (EOS-based) UpdateTX: unlike CoolPropOracle_UpdateTX_Tests, this does not need to
+// exclude a wide band near Tc/the triple point, since SolveAtT solves the real
 // phase-equilibrium conditions rather than reading a pre-fitted ancillary curve - it should
 // stay accurate right up to both physical boundaries.
 [TestClass]
@@ -26,10 +26,10 @@ public class CoolPropOracle_UpdateTXExact_Tests
     public static IEnumerable<object[]> Points()
     {
         // Includes points deep in both previously-excluded ancillary-fit bands (near Tc, near
-        // triple), which UpdateTXFast's own tests deliberately avoid. Does not go closer than
+        // triple), which UpdateTX's own tests deliberately avoid. Does not go closer than
         // 405.0 (0.56 K below Tc): SharpFluids/CoolProp's OWN saturation solver returns null
         // there (confirmed - not just imprecise, it fails outright), so there is no oracle
-        // left to validate against, even though SolveAtTFast itself keeps converging cleanly
+        // left to validate against, even though SolveAtT itself keeps converging cleanly
         // all the way to within 0.001 K of Tc (verified directly against its own residuals).
         double[] temperatures = { 195.6, 196.0, 200.0, 205.0, 220.0, 250.0, 280.0, 300.0, 330.0,
                                    360.0, 390.0, 400.0, 404.0, 405.0 };
@@ -56,7 +56,7 @@ public class CoolPropOracle_UpdateTXExact_Tests
         double sRef = refFluid.Entropy!.JoulePerKilogramKelvin;
         double uRef = refFluid.InternalEnergy!.JoulePerKilogram;
 
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         a.UpdateTXExact(TK, q);
 
         Assert.AreEqual(EngineeringFluids.Helmholtz.Phase.Phases.Twophase, a.Phase, "Phase should be Twophase");
@@ -72,9 +72,9 @@ public class CoolPropOracle_UpdateTXExact_Tests
     [TestMethod]
     public void UpdateXTExact_MatchesUpdateTXExact()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         a.UpdateTXExact(280.0, 0.3);
-        var b = new AmmoniaDouble();
+        var b = new Ammonia();
         b.UpdateXTExact(0.3, 280.0);
 
         Assert.AreEqual(a.Temperature, b.Temperature);
@@ -85,7 +85,7 @@ public class CoolPropOracle_UpdateTXExact_Tests
     [TestMethod]
     public void UpdateTXExact_Throws_ForInvalidQuality()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTXExact(280.0, -0.1));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTXExact(280.0, 1.1));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTXExact(280.0, double.NaN));
@@ -94,7 +94,7 @@ public class CoolPropOracle_UpdateTXExact_Tests
     [TestMethod]
     public void UpdateTXExact_Throws_AtOrAboveTc()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTXExact(Tc, 0.5));
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTXExact(Tc + 5.0, 0.5));
     }
@@ -102,14 +102,14 @@ public class CoolPropOracle_UpdateTXExact_Tests
     [TestMethod]
     public void UpdateTXExact_Throws_AtOrBelowTripleTemperature()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTXExact(Ttriple, 0.5));
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTXExact(Ttriple - 1.0, 0.5));
     }
 
     // ------------------------------------------------------------------
     // Broad randomized sweep across the FULL reliable temperature range, right up to both
-    // physical boundaries (0.05 K margins only, to stay inside SolveAtTFast's own domain
+    // physical boundaries (0.05 K margins only, to stay inside SolveAtT's own domain
     // validation) - no ancillary-fit exclusion zone needed here.
     // ------------------------------------------------------------------
     [TestMethod]
@@ -135,7 +135,7 @@ public class CoolPropOracle_UpdateTXExact_Tests
             double q = rng.NextDouble();
 
             // Within ~0.5 K of Tc, this EOS and CoolProp's genuinely disagree by a small
-            // amount even though each is internally exact (confirmed directly: SolveAtTFast's
+            // amount even though each is internally exact (confirmed directly: SolveAtT's
             // own pressure/fugacity residuals stay at ~1e-8/1e-14 right up to 0.001 K from Tc -
             // see UpdateTXExact.cs remarks). Same known near-critical model divergence already
             // found and excluded for UpdatePS's single-phase sweep.
@@ -160,7 +160,7 @@ public class CoolPropOracle_UpdateTXExact_Tests
             double sRef = refFluid.Entropy.JoulePerKilogramKelvin;
             double uRef = refFluid.InternalEnergy.JoulePerKilogram;
 
-            var a = new AmmoniaDouble();
+            var a = new Ammonia();
             try { a.UpdateTXExact(TK, q); }
             catch (Exception)
             {

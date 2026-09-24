@@ -70,7 +70,7 @@ public class CoolPropOracle_UpdatePX_Tests
         // roughly with proximity to Pc but is NOT monotonic - there's a localized dip in fit
         // accuracy around 0.8-0.95 Pc (up to ~5e-5, a polynomial-fit imperfection, not the
         // sharp critical-point breakdown) before the real breakdown within ~1K of Tc that
-        // UpdatePX itself rejects (see UpdatePXFast.cs). 85 bar (~0.75 Pc, Pc=113.634 bar)
+        // UpdatePX itself rejects (see UpdatePX.cs). 85 bar (~0.75 Pc, Pc=113.634 bar)
         // stays comfortably under that dip.
         double[] pressuresBar = { 0.5, 1, 2, 5, 10, 20, 40, 60, 80, 85 };
         double[] qualities = { 0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0 };
@@ -91,7 +91,7 @@ public class CoolPropOracle_UpdatePX_Tests
         double PPa = Pressure.FromBar(pBar).Pascal;
         var (rhoRef, hRef, sRef, uRef, TsatRef) = OracleMix(PPa, q);
 
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         a.UpdatePX(PPa, q);
 
         Assert.AreEqual(EngineeringFluids.Helmholtz.Phase.Phases.Twophase, a.Phase, "Phase should be Twophase after UpdatePX");
@@ -109,7 +109,7 @@ public class CoolPropOracle_UpdatePX_Tests
     [TestMethod]
     public void UpdatePX_Throws_AtOrAboveCriticalPressure()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pc, 0.5));
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pc * 1.1, 0.5));
     }
@@ -117,7 +117,7 @@ public class CoolPropOracle_UpdatePX_Tests
     [TestMethod]
     public void UpdatePX_Throws_BelowTriplePressure()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePX(Ptriple * 0.5, 0.5));
     }
 
@@ -125,9 +125,9 @@ public class CoolPropOracle_UpdatePX_Tests
     public void UpdatePX_Throws_NearCriticalPoint()
     {
         // Within the last 1K below Tc, ancillary-based rhoL/rhoV lose too much accuracy
-        // (see UpdatePXFast.cs remarks and the sweep test below) - UpdatePX rejects it
+        // (see UpdatePX.cs remarks and the sweep test below) - UpdatePX rejects it
         // outright instead of silently returning an inaccurate state.
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pc * 0.995, 0.5));
     }
 
@@ -137,7 +137,7 @@ public class CoolPropOracle_UpdatePX_Tests
     [DataRow(double.NaN)]
     public void UpdatePX_Throws_ForInvalidQuality(double q)
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePX(1_000_000.0, q));
     }
 
@@ -234,7 +234,7 @@ public class CoolPropOracle_UpdatePX_Tests
                 continue;
             }
 
-            var a = new AmmoniaDouble();
+            var a = new Ammonia();
             try
             {
                 a.UpdatePX(PPa, q);

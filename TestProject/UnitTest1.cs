@@ -12,7 +12,7 @@ public class AmmoniaTests
     [TestMethod]
     public void UpdatePT()
     {
-        var test = new AmmoniaDouble();
+        var test = new Ammonia();
 
         test.UpdatePT(P, T);
 
@@ -37,7 +37,7 @@ public class AmmoniaTests
     [TestMethod]
     public void UpdatePT_Newton_VaporPoint()
     {
-        var test = new AmmoniaDouble();
+        var test = new Ammonia();
 
         test.UpdatePT(P, T);
 

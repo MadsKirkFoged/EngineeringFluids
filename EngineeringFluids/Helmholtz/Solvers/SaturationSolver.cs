@@ -5,7 +5,7 @@ namespace EngineeringFluids.Helmholtz.Solvers;
 
 public static class SaturationSolver
 {
-    public sealed record SatResultDouble(
+    public sealed record SatResult(
     double T,
     double Psat,
     double RhomolarL,
@@ -13,7 +13,7 @@ public static class SaturationSolver
 
     // Rigorous saturation solve: equal pressure + equal fugacity between the two branches,
     // damped Newton in log-density space u=ln(rhoV), w=ln(rhoL/rhoV). Unlike
-    // UpdateTXFast/UpdatePXFast, this does NOT read rhoL/rhoV/Psat off a
+    // UpdateTX/UpdatePX, this does NOT read rhoL/rhoV/Psat off a
     // pre-fitted ancillary curve - it solves the actual phase-equilibrium conditions against
     // the real EOS every call, so its accuracy is bounded only by EOS/Newton convergence
     // (~1e-10 relative), not by how well a polynomial happens to track the true saturation
@@ -21,13 +21,13 @@ public static class SaturationSolver
     // of solver that would be needed to GENERATE ancillary fits for any new fluid in the first
     // place, since there is nothing else to fit those curves against.
     //
-    // The one piece that stays fluid-specific is the initial guess: BubbleDensityFast/
-    // DewDensityFast give a good starting point for ammonia because those fits already exist.
+    // The one piece that stays fluid-specific is the initial guess: BubbleDensity/
+    // DewDensity give a good starting point for ammonia because those fits already exist.
     // A brand-new fluid without ancillary fits yet would need a different bootstrap (e.g. a
     // corresponding-states or Clausius-Clapeyron estimate, or continuation from a temperature
     // where a guess IS available) - only this seed step, not the Newton iteration itself,
     // would need to change per fluid.
-    public static SatResultDouble SolveAtTFast(this AmmoniaDouble local, double T)
+    public static SatResult SolveAtT(this Ammonia local, double T)
     {
         double Ttriple = local.TripleLiquid.Temperature;
         double Tc = local.Critical.Temperature;
@@ -38,8 +38,8 @@ public static class SaturationSolver
         double M = local.MolarMass;
         double rhoRed = local.Critical.MolarDensity;
 
-        double rhoL = BubbleDensityFast.Density((float)T);
-        double rhoV = DewDensityFast.Density((float)T);
+        double rhoL = BubbleDensity.Density((float)T);
+        double rhoV = DewDensity.Density((float)T);
 
         if (rhoV <= 0 || rhoL <= 0 || rhoV >= rhoL)
         {
@@ -57,7 +57,7 @@ public static class SaturationSolver
         // that floor everywhere tested. [benchmark-guided]
         const double tolLnPhi = 1e-10;
 
-        static AmmoniaDouble State(double t, double rhomolar, double m) => new AmmoniaDouble
+        static Ammonia State(double t, double rhomolar, double m) => new Ammonia
         {
             Temperature = t,
             Density = rhomolar * m
@@ -89,7 +89,7 @@ public static class SaturationSolver
             if (Math.Abs(F1) < tolP && Math.Abs(F2) < tolLnPhi)
             {
                 double psat = 0.5 * (pL + pV);
-                return new SatResultDouble(T, psat, rhoL, rhoV);
+                return new SatResult(T, psat, rhoL, rhoV);
             }
 
             double dpL = L.dp_drhomolar_constT_SI;
@@ -123,7 +123,7 @@ public static class SaturationSolver
             if (Math.Abs(F1) < tolP && Math.Abs(du) < 1e-11 && Math.Abs(dw) < 1e-11)
             {
                 double psat = 0.5 * (pL + pV);
-                return new SatResultDouble(T, psat, rhoL, rhoV);
+                return new SatResult(T, psat, rhoL, rhoV);
             }
 
             double lambda = 1.0;

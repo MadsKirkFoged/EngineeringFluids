@@ -1,6 +1,6 @@
 namespace EngineeringFluids.Fluids;
 
-public record SpecificPointdouble
+public record SpecificPoint
 {
     public required double Temperature { get; init; }
 

@@ -5,14 +5,14 @@ using static EngineeringFluids.Helmholtz.Phase;
 
 public static partial class Update
 {
-    // Fast (AmmoniaDouble) pressure + entropy flash. Same two-part shape as UpdatePHFast.cs -
+    // Pressure + entropy flash. Same two-part shape as UpdatePH.cs -
     // see its class remarks for the full rationale (two-phase ancillary check, warm-started
     // outer temperature root-find via Illinois with a safe-bisection fallback for the bracket-
     // collapse failure mode already found and fixed there). Entropy is monotonic increasing in
     // T at fixed P away from phase instabilities (dS/dT|P = Cp/T > 0), same as enthalpy
     // (dH/dT|P = Cp > 0), so the identical bracketing/root-find shape applies unchanged with
     // Entropy in place of Enthalpy at each trial T.
-    public static void UpdatePS(this AmmoniaDouble local, double pTarget, double sTarget)
+    public static void UpdatePS(this Ammonia local, double pTarget, double sTarget)
     {
         if (!double.IsFinite(pTarget) || pTarget <= 0)
             throw new ArgumentOutOfRangeException(nameof(pTarget), $"UpdatePS: pressure must be positive. P={pTarget} Pa.");
@@ -36,19 +36,19 @@ public static partial class Update
 
         if (subcritical)
         {
-            Tsat = SaturationTemperatureFast.Temperature((float)pTarget);
+            Tsat = SaturationTemperature.Temperature((float)pTarget);
 
             if (Tc - Tsat >= 1.0)
             {
-                rhoLGuess = BubbleDensityFast.Density((float)Tsat);
-                rhoVGuess = DewDensityFast.Density((float)Tsat);
+                rhoLGuess = BubbleDensity.Density((float)Tsat);
+                rhoVGuess = DewDensity.Density((float)Tsat);
 
                 // sL/sV come from the full EOS at Tsat/rho, the same way SetTwoPhase's own
                 // SatLiquidState/SatVaporState will evaluate them afterward - not a separate
-                // ancillary entropy fit. See UpdatePHFast.cs's hL/hV remarks for why this
+                // ancillary entropy fit. See UpdatePH.cs's hL/hV remarks for why this
                 // self-consistency matters near the endpoints of the quality inversion.
-                sL = new AmmoniaDouble { Temperature = Tsat, Density = rhoLGuess * M }.Entropy;
-                sV = new AmmoniaDouble { Temperature = Tsat, Density = rhoVGuess * M }.Entropy;
+                sL = new Ammonia { Temperature = Tsat, Density = rhoLGuess * M }.Entropy;
+                sV = new Ammonia { Temperature = Tsat, Density = rhoVGuess * M }.Entropy;
                 double ds = sV - sL;
 
                 if (ds > 1e-6)
@@ -59,7 +59,7 @@ public static partial class Update
                     if (sTarget >= sL - epsS && sTarget <= sV + epsS)
                     {
                         double q = Math.Clamp((sTarget - sL) / ds, 0.0, 1.0);
-                        var sat = new SaturationSolver.SatResultDouble(Tsat, pTarget, rhoLGuess, rhoVGuess);
+                        var sat = new SaturationSolver.SatResult(Tsat, pTarget, rhoLGuess, rhoVGuess);
                         local.SetTwoPhase(sat, q);
                         return;
                     }
@@ -140,7 +140,7 @@ public static partial class Update
                 $"UpdatePS: could not bracket a single-phase solution in [{lo:G6} K, {hi:G6} K]. " +
                 $"P={pTarget} Pa, s={sTarget} J/kg/K is likely outside the supported range.");
 
-        // Illinois (regula falsi variant) - see UpdatePHFast.cs for why convergence is judged
+        // Illinois (regula falsi variant) - see UpdatePH.cs for why convergence is judged
         // only by the actual residual, never by bracket width, and why a safe-bisection
         // fallback is needed for the collapse failure mode.
         const int maxIts = 80;

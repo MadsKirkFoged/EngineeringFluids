@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace EngineeringFluids.Helmholtz;
 
-public static class ResidualHelmholtzPowerFast
+public static class ResidualHelmholtzPower
 {
     // Coefficients (unrolled as constants to remove loop/array overhead)
     private const double n0 = 0.006132232;
@@ -172,14 +172,6 @@ public static class ResidualHelmholtzPowerFast
             term7 * (t7 * invTau);
 
         return sum;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static double alphaR2_dTau(double delta, double tau)
-    {
-        // This is mathematically identical to alphaR_dTauFast:
-        // n*δ^d*t*τ^(t-1)*E = (n*δ^d*τ^t*E) * t/τ
-        return alphaR_dTau(delta, tau);
     }
 
     // Fused first+second delta-derivative: the Newton solver needs both every

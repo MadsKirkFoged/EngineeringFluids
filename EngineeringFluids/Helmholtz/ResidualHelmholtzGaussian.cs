@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace EngineeringFluids.Helmholtz;
 
-public static class ResidualHelmholtzGaussianFast
+public static class ResidualHelmholtzGaussian
 {
     // Keep original coefficients (same numbers), but also keep an int[] version for d
     // so we can avoid (int)d[i] casts in hot loops.
@@ -241,57 +241,6 @@ public static class ResidualHelmholtzGaussianFast
             double factor = Math.FusedMultiplyAdd(ti, invTau, (-2.0 * betai * tt));
 
             sum += term * factor;
-        }
-
-        return sum;
-    }
-
-    // ==========================
-    // alphaR2_dTau  (your alternative form)
-    // This is mathematically equivalent to alphaR_dTau, but we keep it as a separate function name.
-    // Implemented in a way that matches your original structure but avoids redundant Pow.
-    // ==========================
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static double alphaR2_dTau(double delta, double tau)
-    {
-        // tau must be > 0 for log
-        double invTau = 1.0 / tau;
-        double logTau = Math.Log(tau);
-
-        ref double betaRef = ref beta[0];
-        ref int dRef = ref dInt[0];
-        ref double epsRef = ref epsilon[0];
-        ref double etaRef = ref eta[0];
-        ref double gamRef = ref gamma[0];
-        ref double nRef = ref n[0];
-        ref double tRef = ref t[0];
-
-        double sum = 0.0;
-
-        for (int i = 0; i < N; i++)
-        {
-            double betai = Unsafe.Add(ref betaRef, i);
-            int di = Unsafe.Add(ref dRef, i);
-            double epsi = Unsafe.Add(ref epsRef, i);
-            double etai = Unsafe.Add(ref etaRef, i);
-            double gami = Unsafe.Add(ref gamRef, i);
-            double ni = Unsafe.Add(ref nRef, i);
-            double ti = Unsafe.Add(ref tRef, i);
-
-            double deltaPow = PowIntDelta(delta, di);
-            double tauPow = TauPow(ti, logTau);
-
-            double dd = delta - epsi;
-            double tt = tau - gami;
-
-            double expTerm = ExpGaussian(etai, dd, betai, tt);
-
-            // NewTerm = t * tau^(t-1) - 2*beta*tau^t*(tau-gamma)
-            // tau^(t-1) = tau^t / tau = tauPow * invTau
-            double newTerm = Math.FusedMultiplyAdd(ti, tauPow * invTau, (-2.0 * betai * tauPow * tt));
-
-            // term = n * delta^d * NewTerm * expTerm
-            sum += (ni * deltaPow) * (newTerm * expTerm);
         }
 
         return sum;

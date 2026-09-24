@@ -4,13 +4,13 @@ using static EngineeringFluids.Helmholtz.Phase;
 
 public static partial class Update
 {
-    public static void UpdatePT(this AmmoniaDouble local, double pTarget, double t)
+    public static void UpdatePT(this Ammonia local, double pTarget, double t)
         => UpdatePTCore(local, pTarget, t, Phases.Unknown, strictHint: false);
 
-    public static void UpdatePT(this AmmoniaDouble local, double pTarget, double t, Phases phaseHint)
+    public static void UpdatePT(this Ammonia local, double pTarget, double t, Phases phaseHint)
         => UpdatePTCore(local, pTarget, t, phaseHint, strictHint: true);
 
-    private static void UpdatePTCore(AmmoniaDouble local, double pTarget, double t, Phases phaseHint, bool strictHint)
+    private static void UpdatePTCore(Ammonia local, double pTarget, double t, Phases phaseHint, bool strictHint)
     {
 
         // Match CoolProp behavior: PT sets single-phase state and Q=-1
@@ -58,14 +58,14 @@ public static partial class Update
     /// Cheap phase discrimination for pure fluids using psat(T) ancillary.
     /// Returns Gas/Liquid/Supercritical/Twophase.
     /// </summary>
-    private static Phases DeterminePhaseCheapPure(AmmoniaDouble a, double T, double p)
+    private static Phases DeterminePhaseCheapPure(Ammonia a, double T, double p)
     {
         double Tc = a.Critical.Temperature;
         if (T >= Tc)
             return Phases.Supercritical;
 
         // Like CoolProp: near triple, phase determination is tricky; we still use psat(T) but keep a tight two-phase band. [1](https://coolprop.org/_static/doxygen/html/_helmholtz_e_o_s_mixture_backend_8cpp_source.html)
-        double psat = SaturationPressureFast.Pressure((float)T);
+        double psat = SaturationPressure.Pressure((float)T);
 
         // Two-phase ambiguity band. Start tight; widen slightly only if you see false positives.
         double rel = Math.Abs(p - psat) / Math.Max(psat, 1.0);
@@ -78,7 +78,7 @@ public static partial class Update
     /// <summary>
     /// Phase-aware molar density guess.
     /// </summary>
-    private static double GuessRhoMolar(AmmoniaDouble a, double T, double p, Phases phase, out double rhoDewAncillary)
+    private static double GuessRhoMolar(Ammonia a, double T, double p, Phases phase, out double rhoDewAncillary)
     {
         rhoDewAncillary = double.NaN;
 
@@ -110,7 +110,7 @@ public static partial class Update
             // [benchmark-guided]
             if (T > a.TripleLiquid.Temperature + 1e-6 && T < a.Critical.Temperature - 1e-6)
             {
-                var rhoL = BubbleDensityFast.Density((float)T);
+                var rhoL = BubbleDensity.Density((float)T);
                 if (double.IsFinite(rhoL) && rhoL > 0)
                     return Math.Max(1e-12, Math.Min(rhoL, 20.0 * a.Critical.MolarDensity));
             }
@@ -127,7 +127,7 @@ public static partial class Update
     /// Solve rhomolar from (T,P) for a single-phase branch using safeguarded Newton + bisection fallback.
     /// Mirrors CoolProp's "Newton-first, bounded fallback" philosophy. [1](https://coolprop.org/_static/doxygen/html/_helmholtz_e_o_s_mixture_backend_8cpp_source.html)
     /// </summary>
-    private static double SolveRhoMolar_TP(AmmoniaDouble a, double T, double pTarget, Phases phase, double rhoGuess, double rhoDewAncillary = double.NaN)
+    private static double SolveRhoMolar_TP(Ammonia a, double T, double pTarget, Phases phase, double rhoGuess, double rhoDewAncillary = double.NaN)
     {
         double rhoRed = a.Critical.MolarDensity;
 
@@ -152,7 +152,7 @@ public static partial class Update
                 // guess instead of evaluating the same ancillary polynomial a second time.
                 double rhoDew = double.IsFinite(rhoDewAncillary) && rhoDewAncillary > 0
                     ? rhoDewAncillary
-                    : DewDensityFast.Density((float)T);
+                    : DewDensity.Density((float)T);
                 if (double.IsFinite(rhoDew) && rhoDew > 0)
                 {
                     // Small safety factor tolerates ancillary/EOS mismatch right at the dome.
@@ -185,24 +185,24 @@ public static partial class Update
         // instead of once per cache constructor saves 2 redundant Math.Log calls per call.
         double tauFixed = TcLocal / T;
         double logTauFixed = Math.Log(tauFixed);
-        var powTauCache = new ResidualHelmholtzPowerFast.TauCache(tauFixed, logTauFixed);
-        var gaussianTauCache = new ResidualHelmholtzGaussianFast.TauCache(tauFixed, logTauFixed);
-        var gaoBTauCache = new ResidualHelmholtzGaoBFast.TauCache(tauFixed, logTauFixed);
+        var powTauCache = new ResidualHelmholtzPower.TauCache(tauFixed, logTauFixed);
+        var gaussianTauCache = new ResidualHelmholtzGaussian.TauCache(tauFixed, logTauFixed);
+        var gaoBTauCache = new ResidualHelmholtzGaoB.TauCache(tauFixed, logTauFixed);
 
         // Fused (P, dP/drho) evaluation for the Newton loop. The loop needs both
         // alphaR_dDelta and alphaR_dDelta2 every iteration; calling them as two
-        // independent Fast methods (as `a.Pressure` + `a.dp_drhomolar_constT_SI`
+        // independent methods (as `a.Pressure` + `a.dp_drhomolar_constT_SI`
         // used to) redundantly recomputes the same tauPow/exp terms twice per
         // residual class. This evaluates each residual class exactly once per
         // iteration and also skips mutating `a.Temperature`/`a.Density` every step
         // (the caller sets the final state from the returned rho anyway). [benchmark-guided]
-        void EvalFast(double rho_, out double pEOS_, out double dpdrho_)
+        void EvalPressure(double rho_, out double pEOS_, out double dpdrho_)
         {
             double delta = rho_ / rhoRed;
 
-            ResidualHelmholtzPowerFast.alphaR_dDelta_dDelta2(delta, in powTauCache, out double p1, out double p2);
-            ResidualHelmholtzGaussianFast.alphaR_dDelta_dDelta2(delta, in gaussianTauCache, out double g1, out double g2);
-            ResidualHelmholtzGaoBFast.alphaR_dDelta_dDelta2(delta, in gaoBTauCache, out double b1, out double b2);
+            ResidualHelmholtzPower.alphaR_dDelta_dDelta2(delta, in powTauCache, out double p1, out double p2);
+            ResidualHelmholtzGaussian.alphaR_dDelta_dDelta2(delta, in gaussianTauCache, out double g1, out double g2);
+            ResidualHelmholtzGaoB.alphaR_dDelta_dDelta2(delta, in gaoBTauCache, out double b1, out double b2);
 
             double dDelta = p1 + g1 + b1;
             double dDelta2 = p2 + g2 + b2;
@@ -223,7 +223,7 @@ public static partial class Update
         // evaluations (~12 total EOS evaluations vs ~15 before). [benchmark-guided]
         // Newton needs (pEOS, dpdrho) at the starting rho for its very first step anyway;
         // capturing them here instead of throwing them away avoids that first iteration
-        // re-evaluating the exact same point from scratch (one full EvalFast call - all
+        // re-evaluating the exact same point from scratch (one full EvalPressure call - all
         // ~15 Exp calls across the 3 residual classes - saved on every supercritical call).
         bool havePrimedEval = false;
         double primedPEOS = 0.0, primedDpDrho = 0.0;
@@ -237,7 +237,7 @@ public static partial class Update
             foreach (double cand in candidates)
             {
                 double c = Math.Clamp(cand, rhoMin, rhoMax);
-                EvalFast(c, out double pEOS, out double dpdrho);
+                EvalPressure(c, out double pEOS, out double dpdrho);
                 double absF = Math.Abs(Resid(pEOS, pTarget));
                 if (absF < bestAbsF)
                 {
@@ -280,7 +280,7 @@ public static partial class Update
             }
             else
             {
-                EvalFast(rho, out pEOS, out dpdrho);
+                EvalPressure(rho, out pEOS, out dpdrho);
             }
 
             double f = Resid(pEOS, pTarget);
@@ -347,14 +347,14 @@ public static partial class Update
 
         return 0.5 * (lo + hi);
 
-        static void SetState(AmmoniaDouble a, double T, double rhomolar)
+        static void SetState(Ammonia a, double T, double rhomolar)
         {
             a.Temperature = T;
             a.Density = rhomolar * a.MolarMass;
         }
 
 
-        static bool TryBracket(AmmoniaDouble a, double T, double pTarget, double rhoMin, double rhoMax,
+        static bool TryBracket(Ammonia a, double T, double pTarget, double rhoMin, double rhoMax,
             out double lo, out double hi, out double fLo, out double fHi)
         {
             lo = rhoMin;

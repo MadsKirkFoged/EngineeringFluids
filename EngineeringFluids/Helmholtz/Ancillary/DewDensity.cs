@@ -2,10 +2,10 @@
 using System.Runtime.CompilerServices;
 
 /// <summary>
-/// Fast DewDensityFast approximation generated from data2.csv.
+/// Fast DewDensity approximation generated from data2.csv.
 /// Column order in data2.csv: temperature; pressure; BubbleEnthalpy; DewEnthalpy; BubbleDensity; DewDensity
 ///
-/// Two-part piecewise quadratic (same style as SaturationPressureFast):
+/// Two-part piecewise quadratic (same style as SaturationPressure):
 ///   - T <= 403°C  : 2°C segments, quadratic in normalized u (least-squares fit)
 ///   - T >  403°C  : 0.01°C segments, quadratic in normalized u, EXACT through the 3 grid points (u=-1,0,1)
 ///
@@ -14,7 +14,7 @@ using System.Runtime.CompilerServices;
 ///
 /// Note: coefficients were generated after smoothing a small corrupted tail region near ~405.10–405.19°C.
 /// </summary>
-public static class DewDensityFast
+public static class DewDensity
 {
     public const float Tmin = 195.4949951171875f;
     public const float Tmax = 405.55999755859375f;

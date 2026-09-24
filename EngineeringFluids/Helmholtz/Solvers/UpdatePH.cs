@@ -5,10 +5,10 @@ using static EngineeringFluids.Helmholtz.Phase;
 
 public static partial class Update
 {
-    // Fast (AmmoniaDouble) pressure + enthalpy flash. Unlike UpdatePT/UpdatePX, there is no
+    // Pressure + enthalpy flash. Unlike UpdatePT/UpdatePX, there is no
     // direct ancillary shortcut for (P,H): the result can be single-phase OR two-phase
     // depending on where hTarget falls, so this has to combine the cheap two-phase check from
-    // UpdatePXFast.cs with an actual root-find over temperature for the single-phase case.
+    // UpdatePX.cs with an actual root-find over temperature for the single-phase case.
     //
     // A) Two-phase check: same ancillaries as UpdatePX (Tsat/rhoL/rhoV/hL/hV), reused here to
     //    see whether hTarget falls inside the saturation dome at Tsat(P). If so, quality is a
@@ -17,7 +17,7 @@ public static partial class Update
     //    the correct side of the dome (when known). Illinois converges superlinearly, so this
     //    typically needs only a handful of iterations, versus 200+ for plain bisection. Each
     //    iteration calls the internal
-    //    density solver (SolveRhoMolar_TP, from UpdatePTFast.cs - private but visible here
+    //    density solver (SolveRhoMolar_TP, from UpdatePT.cs - private but visible here
     //    since this is the same partial class) directly with a density guess WARM-STARTED
     //    from the previous trial temperature, rather than going through the public UpdatePT
     //    (which re-detects phase and rebuilds a guess from ancillaries from scratch on every
@@ -43,7 +43,7 @@ public static partial class Update
     // low P/low q - not present in UpdatePX, which is given quality directly. The absolute
     // density error stays tiny even so; only points below ~1 MPa with quality very close to an
     // endpoint are affected. [benchmark-guided]
-    public static void UpdatePH(this AmmoniaDouble local, double pTarget, double hTarget)
+    public static void UpdatePH(this Ammonia local, double pTarget, double hTarget)
     {
         if (!double.IsFinite(pTarget) || pTarget <= 0)
             throw new ArgumentOutOfRangeException(nameof(pTarget), $"UpdatePH: pressure must be positive. P={pTarget} Pa.");
@@ -68,12 +68,12 @@ public static partial class Update
 
         if (subcritical)
         {
-            Tsat = SaturationTemperatureFast.Temperature((float)pTarget);
+            Tsat = SaturationTemperature.Temperature((float)pTarget);
 
             if (Tc - Tsat >= 1.0)
             {
-                rhoLGuess = BubbleDensityFast.Density((float)Tsat);
-                rhoVGuess = DewDensityFast.Density((float)Tsat);
+                rhoLGuess = BubbleDensity.Density((float)Tsat);
+                rhoVGuess = DewDensity.Density((float)Tsat);
 
                 // hL/hV must come from the SAME source SetTwoPhase's own SatLiquidState/
                 // SatVaporState will use afterward (the full EOS evaluated at Tsat/rhoL/rhoV),
@@ -84,8 +84,8 @@ public static partial class Update
                 // near q~0: the reciprocal specific-volume mixing rule is very sensitive to a
                 // small quality error there (1/rhoV >> 1/rhoL). Evaluating hL/hV the same way
                 // the final state will be reported keeps this self-consistent. [benchmark-guided]
-                hL = new AmmoniaDouble { Temperature = Tsat, Density = rhoLGuess * M }.Enthalpy;
-                hV = new AmmoniaDouble { Temperature = Tsat, Density = rhoVGuess * M }.Enthalpy;
+                hL = new Ammonia { Temperature = Tsat, Density = rhoLGuess * M }.Enthalpy;
+                hV = new Ammonia { Temperature = Tsat, Density = rhoVGuess * M }.Enthalpy;
                 double dh = hV - hL;
 
                 if (dh > 1e-3)
@@ -98,7 +98,7 @@ public static partial class Update
                     if (hTarget >= hL - epsH && hTarget <= hV + epsH)
                     {
                         double q = Math.Clamp((hTarget - hL) / dh, 0.0, 1.0);
-                        var sat = new SaturationSolver.SatResultDouble(Tsat, pTarget, rhoLGuess, rhoVGuess);
+                        var sat = new SaturationSolver.SatResult(Tsat, pTarget, rhoLGuess, rhoVGuess);
                         local.SetTwoPhase(sat, q);
                         return;
                     }

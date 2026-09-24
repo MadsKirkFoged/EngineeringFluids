@@ -7,7 +7,7 @@ namespace TestProject;
 [TestClass]
 public class DerivativeTests
 {
-    private static readonly AmmoniaDouble Ref = new();
+    private static readonly Ammonia Ref = new();
     private static readonly double RhoCritMass = Ref.Critical.MolarDensity * Ref.MolarMass; // kg/m3
 
     private static double AdaptiveEps(double delta)
@@ -18,8 +18,8 @@ public class DerivativeTests
         return eps;
     }
 
-    private static AmmoniaDouble StateAt(double T, double delta)
-        => new AmmoniaDouble { Temperature = T, Density = RhoCritMass * delta };
+    private static Ammonia StateAt(double T, double delta)
+        => new Ammonia { Temperature = T, Density = RhoCritMass * delta };
 
     private static void AssertDDelta2MatchesFiniteDifference(double T, double delta, string label)
     {

@@ -8,7 +8,7 @@ using System.Collections.Generic;
 namespace TestProject;
 
 [TestClass]
-public class CoolPropOracle_UpdateTX_FastTests
+public class CoolPropOracle_UpdateTX_Tests
 {
     private const double Tc = 405.56;
     private const double Ttriple = 195.495;
@@ -52,7 +52,7 @@ public class CoolPropOracle_UpdateTX_FastTests
         double sRef = refFluid.Entropy!.JoulePerKilogramKelvin;
         double uRef = refFluid.InternalEnergy!.JoulePerKilogram;
 
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         a.UpdateTX(TK, q);
 
         Assert.AreEqual(EngineeringFluids.Helmholtz.Phase.Phases.Twophase, a.Phase, "Phase should be Twophase");
@@ -68,9 +68,9 @@ public class CoolPropOracle_UpdateTX_FastTests
     [TestMethod]
     public void UpdateXT_MatchesUpdateTX()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         a.UpdateTX(280.0, 0.3);
-        var b = new AmmoniaDouble();
+        var b = new Ammonia();
         b.UpdateXT(0.3, 280.0);
 
         Assert.AreEqual(a.Temperature, b.Temperature);
@@ -81,7 +81,7 @@ public class CoolPropOracle_UpdateTX_FastTests
     [TestMethod]
     public void UpdateTX_Throws_ForInvalidQuality()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(280.0, -0.1));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(280.0, 1.1));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(280.0, double.NaN));
@@ -90,7 +90,7 @@ public class CoolPropOracle_UpdateTX_FastTests
     [TestMethod]
     public void UpdateTX_Throws_AtOrAboveTc()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Tc, 0.5));
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Tc + 5.0, 0.5));
     }
@@ -98,14 +98,14 @@ public class CoolPropOracle_UpdateTX_FastTests
     [TestMethod]
     public void UpdateTX_Throws_BelowTripleTemperature()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Ttriple - 1.0, 0.5));
     }
 
     [TestMethod]
     public void UpdateTX_Throws_NearCriticalPoint()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Tc - 0.5, 0.5));
     }
 
@@ -126,8 +126,8 @@ public class CoolPropOracle_UpdateTX_FastTests
         int pass = 0, fail = 0, skip = 0, attempts = 0;
         var worst = new List<(double eP, double eRho, double eH, double eS, double eU, double T, double q)>();
 
-        // BubbleDensityFast/DewDensityFast accuracy degrades gradually well before the
-        // production-level Tc-1.0 hard cutoff (UpdateTXFast.cs rejects outright below that),
+        // BubbleDensity/DewDensity accuracy degrades gradually well before the
+        // production-level Tc-1.0 hard cutoff (UpdateTX.cs rejects outright below that),
         // and well beyond the narrow triple-point margin one might expect too - first-run
         // sweep data showed relative errors up to ~3e-4 in density (and ~7e-5 in h/s/u)
         // appearing as far as ~10-11 K below Tc, and Psat's own fit breaching 1e-5 as far as
@@ -160,7 +160,7 @@ public class CoolPropOracle_UpdateTX_FastTests
             double sRef = refFluid.Entropy.JoulePerKilogramKelvin;
             double uRef = refFluid.InternalEnergy.JoulePerKilogram;
 
-            var a = new AmmoniaDouble();
+            var a = new Ammonia();
             try { a.UpdateTX(TK, q); }
             catch (Exception)
             {

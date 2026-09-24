@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace EngineeringFluids.Helmholtz;
 
-public static class ResidualHelmholtzGaoBFast
+public static class ResidualHelmholtzGaoB
 {
     private static readonly double[] b = { 1.244, 0.6826 };
     private static readonly double[] beta = { 0.3696, 0.2962 };

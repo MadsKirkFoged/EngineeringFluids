@@ -8,7 +8,7 @@ using System.Collections.Generic;
 namespace TestProject;
 
 [TestClass]
-public class CoolPropOracle_UpdatePS_FastTests
+public class CoolPropOracle_UpdatePS_Tests
 {
     private const double Tc = 405.56;
     private const double Pc = 11363400.0;
@@ -57,7 +57,7 @@ public class CoolPropOracle_UpdatePS_FastTests
         double hRef = refFluid.Enthalpy!.JoulePerKilogram;
         double uRef = refFluid.InternalEnergy!.JoulePerKilogram;
 
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         a.UpdatePS(PPa, sRef);
 
         Assert.AreEqual(-1.0, a.Quality, "Single-phase result should report Quality=-1");
@@ -106,7 +106,7 @@ public class CoolPropOracle_UpdatePS_FastTests
         satFluid.Pressure = P;
         double TsatRef = satFluid.Tsat!.Kelvin;
 
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         a.UpdatePS(P.Pascal, sMix);
 
         Assert.AreEqual(EngineeringFluids.Helmholtz.Phase.Phases.Twophase, a.Phase, "Phase should be Twophase");
@@ -118,7 +118,7 @@ public class CoolPropOracle_UpdatePS_FastTests
     [TestMethod]
     public void UpdatePS_Throws_ForNonPositivePressure()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePS(0.0, 1000.0));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePS(-1.0, 1000.0));
     }
@@ -126,7 +126,7 @@ public class CoolPropOracle_UpdatePS_FastTests
     [TestMethod]
     public void UpdatePS_Throws_ForNonFiniteEntropy()
     {
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePS(1_000_000.0, double.NaN));
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePS(1_000_000.0, double.PositiveInfinity));
     }
@@ -196,7 +196,7 @@ public class CoolPropOracle_UpdatePS_FastTests
                 double rhoRef = 1.0 / ((1.0 - q) / rhoL + q / rhoV);
                 double sRef = (1.0 - q) * L.Entropy.JoulePerKilogramKelvin + q * V.Entropy.JoulePerKilogramKelvin;
 
-                var a = new AmmoniaDouble();
+                var a = new Ammonia();
                 try { a.UpdatePS(PPa, sRef); }
                 catch (Exception)
                 {
@@ -259,7 +259,7 @@ public class CoolPropOracle_UpdatePS_FastTests
                 double hRef = refFluid.Enthalpy.JoulePerKilogram;
                 double uRef = refFluid.InternalEnergy.JoulePerKilogram;
 
-                var a = new AmmoniaDouble();
+                var a = new Ammonia();
                 try { a.UpdatePS(PPa, sRef); }
                 catch (Exception)
                 {

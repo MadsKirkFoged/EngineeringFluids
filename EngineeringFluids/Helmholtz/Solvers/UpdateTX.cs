@@ -4,14 +4,14 @@ using System;
 
 public static partial class Update
 {
-    // Fast (AmmoniaDouble) temperature + vapor-quality flash: sets a two-phase saturated state
+    // Temperature + vapor-quality flash: sets a two-phase saturated state
     // at tTarget with mass quality `quality` (0 = saturated liquid, 1 = saturated vapor).
     //
-    // Even cheaper than UpdatePXFast: T is already the independent variable the ancillaries
-    // are fit against, so this skips UpdatePX's own P->T bisection (SaturationTemperatureFast)
+    // Even cheaper than UpdatePX: T is already the independent variable the ancillaries
+    // are fit against, so this skips UpdatePX's own P->T bisection (SaturationTemperature)
     // entirely and goes straight to Psat(T)/rhoL(T)/rhoV(T) - three direct O(1) ancillary
     // polynomial reads, no iteration of any kind. Same accuracy profile and near-critical
-    // fragility as UpdatePXFast (rhoL/rhoV both converge onto the critical density in the last
+    // fragility as UpdatePX (rhoL/rhoV both converge onto the critical density in the last
     // ~1 K below Tc, amplifying any small ancillary error in relative terms) - rejected below
     // for the same reason. [benchmark-guided]
     //
@@ -25,7 +25,7 @@ public static partial class Update
     // band, where the ancillaries are unconditionally unreliable) since accuracy degrades
     // gradually rather than breaking down - callers needing tight tolerances within ~15 K of
     // either endpoint should verify against UpdatePT instead. [benchmark-guided]
-    public static void UpdateTX(this AmmoniaDouble local, double tTarget, double quality)
+    public static void UpdateTX(this Ammonia local, double tTarget, double quality)
     {
         if (double.IsNaN(quality) || quality < 0.0 || quality > 1.0)
             throw new ArgumentOutOfRangeException(nameof(quality), "Quality must be in [0,1].");
@@ -46,15 +46,15 @@ public static partial class Update
                 $"UpdateTX: temperature too close to the critical point for a reliable fast ancillary-based " +
                 $"two-phase solve (Tc-T={Tc - tTarget:G3} K). T={tTarget} K. Use UpdatePT with a phase hint instead.");
 
-        double psat = SaturationPressureFast.Pressure((float)tTarget);
-        double rhoL = BubbleDensityFast.Density((float)tTarget);
-        double rhoV = DewDensityFast.Density((float)tTarget);
+        double psat = SaturationPressure.Pressure((float)tTarget);
+        double rhoL = BubbleDensity.Density((float)tTarget);
+        double rhoV = DewDensity.Density((float)tTarget);
 
-        var sat = new SaturationSolver.SatResultDouble(tTarget, psat, rhoL, rhoV);
+        var sat = new SaturationSolver.SatResult(tTarget, psat, rhoL, rhoV);
         local.SetTwoPhase(sat, quality);
     }
 
     // Alias to match SharpFluids naming (Quality, Temperature).
-    public static void UpdateXT(this AmmoniaDouble local, double quality, double tTarget)
+    public static void UpdateXT(this Ammonia local, double quality, double tTarget)
         => UpdateTX(local, tTarget, quality);
 }

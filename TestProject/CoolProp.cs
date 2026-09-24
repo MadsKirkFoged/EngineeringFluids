@@ -121,7 +121,7 @@ public class CoolPropOracle_UpdatePT_Tests
         double p_ref = refFluid.Pressure!.Pascal;
 
         // --- Your implementation ---
-        var a = new AmmoniaDouble();
+        var a = new Ammonia();
 
         try
         {
@@ -280,7 +280,7 @@ public class CoolPropOracle_UpdatePT_Tests
             double p_ref = refFluid.Pressure!.Pascal;
 
             // Your model
-            var a = new AmmoniaDouble();
+            var a = new Ammonia();
             try
             {
                 a.UpdatePT(P.SI, T.SI);
@@ -491,10 +491,7 @@ public class CoolPropOracle_UpdatePT_Tests
 
         var refFluid = new SharpFluids.Fluid(SharpFluids.FluidList.Ammonia);
         var satFluid = new SharpFluids.Fluid(SharpFluids.FluidList.Ammonia); // used only for Tsat(P)
-        // AmmoniaDouble (the Fast/no-units implementation) is what actually ships, so that's
-        // what needs the CoolProp coverage - Ammonia (EngineeringUnits) is the slow reference
-        // copy and is already covered elsewhere.
-        var a = new EngineeringFluids.Fluids.AmmoniaDouble();
+        var a = new EngineeringFluids.Fluids.Ammonia();
 
         // Stats arrays (store errors for percentiles)
         var errRho = new double[targetPoints];

@@ -11,7 +11,7 @@ using System.Runtime.CompilerServices;
 ///
 /// Segment mapping is O(1) (no binary search), suited for hot paths.
 /// </summary>
-public static class SaturationPressureFast
+public static class SaturationPressure
 {
     // Domain (from your old system)
     public const float Tmin = 195.495f;
