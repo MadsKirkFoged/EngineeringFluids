@@ -147,13 +147,17 @@ public class AmmoniaDouble
     // Helmholtz energy terms
     // ---------------------------
     public double Alpha0 => alpha0(Delta, Tau);
+    public double Alpha0Fast => alpha0Fast(Delta, Tau);
     public double AlphaR => alphaR(Delta, Tau);
+    public double AlphaRFast => alphaRFast(Delta, Tau);
     public double Alpha => Alpha0 + AlphaR;
 
     public double Alpha0_dTau => alpha0_dTau(Delta, Tau);
+    public double Alpha0_dTauFast => alpha0_dTauFast(Delta, Tau);
     public double AlphaR_dDelta => alphaR_dDelta(Delta, Tau);
     public double AlphaR_dDeltaFast => alphaR_dDeltaFast(Delta, Tau);
     public double AlphaR_dTau => alphaR_dTau(Delta, Tau);
+    public double AlphaR_dTauFast => alphaR_dTauFast(Delta, Tau);
 
     public double AlphaR_dDelta2 => alphaR_dDelta2(Delta, Tau);
     public double AlphaR_dDelta2Fast => alphaR_dDelta2Fast(Delta, Tau);
@@ -245,6 +249,24 @@ public class AmmoniaDouble
         }
     }
 
+    // Same formula as Pressure, but using AlphaR_dDeltaFast - needed by SolveAtTFast's
+    // saturation Newton loop, where it is evaluated many times per call.
+    public double PressureFast
+    {
+        get
+        {
+            if (_isTwoPhase)
+            {
+                if (_satCache == null)
+                    throw new InvalidOperationException("Two-phase state missing saturation cache.");
+                return _satCache.Psat;
+            }
+
+            EnsureSinglePhaseState();
+            return (MolarDensity * GasConstant * Temperature * (1 + Delta * AlphaR_dDeltaFast));
+        }
+    }
+
     // ---------------------------
     // Thermodynamic properties
     // ---------------------------
@@ -256,6 +278,21 @@ public class AmmoniaDouble
             return GasConstant * (Tau * (Alpha0_dTau + AlphaR_dTau) - Alpha0 - AlphaR);
         }
     }
+
+    // Same formula as MolarEntropy/Entropy, but using the Fast Alpha0/AlphaR/derivative terms
+    // (see HMolarEnthalpyFast remarks) instead of the originals - needed by UpdatePSFast's
+    // outer temperature search, where the plain Entropy property was the dominant per-
+    // iteration cost. [benchmark-guided]
+    public double MolarEntropyFast
+    {
+        get
+        {
+            EnsureSinglePhaseState();
+            return GasConstant * (Tau * (Alpha0_dTauFast + AlphaR_dTauFast) - Alpha0Fast - AlphaRFast);
+        }
+    }
+
+    public double EntropyFast => MolarEntropyFast / MolarMass;
 
     public double Entropy
     {
@@ -306,6 +343,24 @@ public class AmmoniaDouble
         }
     }
 
+    // Same formula as HMolarEnthalpy/Enthalpy, but using the Fast (unrolled/FMA, no per-call
+    // Exp/Log savings beyond what each Fast residual class already does on its own - see
+    // ResidualHelmholtz*Fast.alphaR_dTau, IdealHelmholtzPlanckEinsteinFast.Alpha0_dTau)
+    // derivative terms instead of the originals. Mathematically identical, ~3x cheaper per
+    // call - matters when this is evaluated repeatedly inside a solve loop (e.g. UpdatePHFast's
+    // outer temperature search), where the plain Enthalpy property was the dominant per-
+    // iteration cost. [benchmark-guided]
+    public double HMolarEnthalpyFast
+    {
+        get
+        {
+            EnsureSinglePhaseState();
+            return GasConstant * Temperature! * (1 + Tau * (Alpha0_dTauFast + AlphaR_dTauFast) + Delta * AlphaR_dDeltaFast);
+        }
+    }
+
+    public double EnthalpyFast => HMolarEnthalpyFast / MolarMass;
+
     public double Enthalpy
     {
         get
@@ -350,6 +405,17 @@ public class AmmoniaDouble
 
     public double Fugacity => FugacityCoefficient * Pressure;
 
+    // Same formula as LNFugacityCoefficient, but using the Fast AlphaR/AlphaR_dDelta terms -
+    // needed by SolveAtTFast's saturation Newton loop.
+    public double LNFugacityCoefficientFast
+    {
+        get
+        {
+            EnsureSinglePhaseState();
+            return AlphaRFast + Delta * AlphaR_dDeltaFast - Math.Log(1 + Delta * AlphaR_dDeltaFast);
+        }
+    }
+
     // d(ln(phi))/d(delta)
     public double dLnPhi_dDelta
     {
@@ -365,6 +431,20 @@ public class AmmoniaDouble
         }
     }
 
+    public double dLnPhi_dDeltaFast
+    {
+        get
+        {
+            EnsureSinglePhaseState();
+
+            double a1 = AlphaR_dDeltaFast;
+            double a2 = AlphaR_dDelta2Fast;
+            double denom = 1.0 + Delta * a1;
+
+            return 2.0 * a1 + Delta * a2 - (a1 + Delta * a2) / denom;
+        }
+    }
+
     // d(ln(phi))/d(rhomolar) at const T
     public double dLnPhi_dRhomolar_constT_SI
     {
@@ -373,6 +453,16 @@ public class AmmoniaDouble
             EnsureSinglePhaseState();
             double rhomolar_red = Critical.MolarDensity;
             return dLnPhi_dDelta / rhomolar_red;
+        }
+    }
+
+    public double dLnPhi_dRhomolar_constT_SIFast
+    {
+        get
+        {
+            EnsureSinglePhaseState();
+            double rhomolar_red = Critical.MolarDensity;
+            return dLnPhi_dDeltaFast / rhomolar_red;
         }
     }
 
@@ -445,11 +535,32 @@ public class AmmoniaDouble
                IdealHelmholtzPlanckEinstein.Alpha0_dTau(delta, tau);
     }
 
+    private static double alpha0_dTauFast(double delta, double tau)
+    {
+        return IdealGasHelmholtzLead.Alpha0_dTau(delta, tau) +
+               IdealHelmholtzLogTau.Alpha0_dTau(delta, tau) +
+               IdealHelmholtzPlanckEinsteinFast.Alpha0_dTau(delta, tau);
+    }
+
+    private static double alpha0Fast(double delta, double tau)
+    {
+        return IdealGasHelmholtzLead.Alpha0(delta, tau) +
+               IdealHelmholtzLogTau.Alpha0(delta, tau) +
+               IdealHelmholtzPlanckEinsteinFast.Alpha0(delta, tau);
+    }
+
     private static double alphaR(double delta, double tau)
     {
         return ResidualHelmholtzPower.alphaR(delta, tau) +
                ResidualHelmholtzGaussian.alphaR(delta, tau) +
                ResidualHelmholtzGaoB.alphaR(delta, tau);
+    }
+
+    private static double alphaRFast(double delta, double tau)
+    {
+        return ResidualHelmholtzPowerFast.alphaR(delta, tau) +
+               ResidualHelmholtzGaussianFast.alphaR(delta, tau) +
+               ResidualHelmholtzGaoBFast.alphaR(delta, tau);
     }
 
     //Cache
@@ -495,6 +606,13 @@ public class AmmoniaDouble
         return ResidualHelmholtzPower.alphaR_dTau(delta, tau) +
                ResidualHelmholtzGaussian.alphaR_dTau(delta, tau) +
                ResidualHelmholtzGaoB.alphaR_dTau(delta, tau);
+    }
+
+    private static double alphaR_dTauFast(double delta, double tau)
+    {
+        return ResidualHelmholtzPowerFast.alphaR_dTau(delta, tau) +
+               ResidualHelmholtzGaussianFast.alphaR_dTau(delta, tau) +
+               ResidualHelmholtzGaoBFast.alphaR_dTau(delta, tau);
     }
 
 

@@ -6,7 +6,6 @@ using static EngineeringFluids.Helmholtz.Phase;
 
 public static partial class Update
 {
-
     // Public API stays the same
     public static void UpdatePT(this Ammonia local, Pressure pTarget, Temperature t)
         => UpdatePTCore(local, pTarget, t, Phases.Unknown, strictHint: false);
