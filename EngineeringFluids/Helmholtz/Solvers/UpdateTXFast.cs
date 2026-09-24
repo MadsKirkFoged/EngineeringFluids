@@ -54,7 +54,7 @@ public static partial class Update
         local.SetTwoPhase(sat, quality);
     }
 
-    // Alias to match SharpFluids naming (Quality, Temperature) - see the slow Ammonia.UpdateXT.
+    // Alias to match SharpFluids naming (Quality, Temperature).
     public static void UpdateXT(this AmmoniaDouble local, double quality, double tTarget)
         => UpdateTX(local, tTarget, quality);
 }

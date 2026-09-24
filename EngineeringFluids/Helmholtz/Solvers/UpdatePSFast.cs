@@ -11,7 +11,7 @@ public static partial class Update
     // collapse failure mode already found and fixed there). Entropy is monotonic increasing in
     // T at fixed P away from phase instabilities (dS/dT|P = Cp/T > 0), same as enthalpy
     // (dH/dT|P = Cp > 0), so the identical bracketing/root-find shape applies unchanged with
-    // EntropyFast in place of EnthalpyFast at each trial T.
+    // Entropy in place of Enthalpy at each trial T.
     public static void UpdatePS(this AmmoniaDouble local, double pTarget, double sTarget)
     {
         if (!double.IsFinite(pTarget) || pTarget <= 0)
@@ -47,8 +47,8 @@ public static partial class Update
                 // SatLiquidState/SatVaporState will evaluate them afterward - not a separate
                 // ancillary entropy fit. See UpdatePHFast.cs's hL/hV remarks for why this
                 // self-consistency matters near the endpoints of the quality inversion.
-                sL = new AmmoniaDouble { Temperature = Tsat, Density = rhoLGuess * M }.EntropyFast;
-                sV = new AmmoniaDouble { Temperature = Tsat, Density = rhoVGuess * M }.EntropyFast;
+                sL = new AmmoniaDouble { Temperature = Tsat, Density = rhoLGuess * M }.Entropy;
+                sV = new AmmoniaDouble { Temperature = Tsat, Density = rhoVGuess * M }.Entropy;
                 double ds = sV - sL;
 
                 if (ds > 1e-6)
@@ -129,7 +129,7 @@ public static partial class Update
             haveGuess = true;
             local.Temperature = TK;
             local.Density = rhomolar * M;
-            return local.EntropyFast;
+            return local.Entropy;
         }
 
         double flo = EvalWarm(lo) - sTarget;

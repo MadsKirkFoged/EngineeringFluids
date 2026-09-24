@@ -13,7 +13,7 @@ public static partial class Update
     // above the triple-point pressure up to within ~1 K of Tc), this already matches to
     // ~1e-6..1e-7 relative on Tsat/rhoL/rhoV - because the ancillaries were fit directly
     // against the same saturation curve this EOS is meant to reproduce, a coupled two-density
-    // Newton solve (like the slow Ammonia.UpdatePX's SaturationSolver.SolveAtP) buys no
+    // Newton solve (like SaturationSolver.SolveAtTFast) buys no
     // measurable accuracy here for a lot more per-call cost. Downstream Enthalpy/Entropy/
     // InternalEnergy are then computed by AmmoniaDouble's existing SetTwoPhase/SatLiquidState/
     // SatVaporState machinery, which evaluates the full EOS at (Tsat, rhoL) and (Tsat, rhoV) -

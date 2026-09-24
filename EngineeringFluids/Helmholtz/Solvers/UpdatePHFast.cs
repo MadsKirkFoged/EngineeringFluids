@@ -15,8 +15,8 @@ public static partial class Update
     //    direct linear interpolation - no iteration needed, same O(1) cost as UpdatePX.
     // B) Single-phase flash: false position (Illinois variant) over T at fixed P, bounded to
     //    the correct side of the dome (when known). Illinois converges superlinearly, so this
-    //    typically needs only a handful of iterations - nowhere near the slow reference
-    //    Ammonia.UpdatePH's 200+-iteration plain bisection. Each iteration calls the internal
+    //    typically needs only a handful of iterations, versus 200+ for plain bisection. Each
+    //    iteration calls the internal
     //    density solver (SolveRhoMolar_TP, from UpdatePTFast.cs - private but visible here
     //    since this is the same partial class) directly with a density guess WARM-STARTED
     //    from the previous trial temperature, rather than going through the public UpdatePT
@@ -27,15 +27,13 @@ public static partial class Update
     //    solve to 1-2 Newton steps per outer iteration instead of rebuilding it from an
     //    ancillary guess every time. The net win still scales with how many outer iterations
     //    the bracket needs: a handful for a tight bracket near the dome, more for a bracket
-    //    spanning a wide T range (e.g. a far-superheated gas state bracketed by [Tsat, 2500K])
-    //    - still well under the slow reference Ammonia.UpdatePH's 200+-iteration plain
-    //    bisection either way. [benchmark-guided]
+    //    spanning a wide T range (e.g. a far-superheated gas state bracketed by [Tsat, 2500K]).
+    //    [benchmark-guided]
     //
     // Near the critical point the two-phase band collapses to near-zero width, and both the
     // ancillaries and CoolProp's own saturation solver lose reliability resolving it (same
     // fragility already found for UpdatePT/UpdatePX) - this falls through to the single-phase
-    // search instead of trying to resolve a vanishing dome, mirroring how the slow
-    // Ammonia.UpdatePH treats a collapsing hV-hL. [benchmark-guided]
+    // search instead of trying to resolve a vanishing dome. [benchmark-guided]
     //
     // Separately, at LOW absolute pressure with a two-phase result very close to q=0 or q=1,
     // the reported density can be less precise in relative terms than elsewhere: rhoV is tiny
@@ -79,15 +77,15 @@ public static partial class Update
 
                 // hL/hV must come from the SAME source SetTwoPhase's own SatLiquidState/
                 // SatVaporState will use afterward (the full EOS evaluated at Tsat/rhoL/rhoV),
-                // not the separate BubbleEnthalpyFast/DewEnthalpyFast polynomial fits. Those
+                // not separate bubble/dew enthalpy polynomial fits. Those
                 // fits carry their own small, independent approximation error relative to the
                 // EOS - fine for UpdatePX (which only needs a self-consistent quality/rho pair
                 // once), but here that mismatch was showing up amplified into density error
                 // near q~0: the reciprocal specific-volume mixing rule is very sensitive to a
                 // small quality error there (1/rhoV >> 1/rhoL). Evaluating hL/hV the same way
                 // the final state will be reported keeps this self-consistent. [benchmark-guided]
-                hL = new AmmoniaDouble { Temperature = Tsat, Density = rhoLGuess * M }.EnthalpyFast;
-                hV = new AmmoniaDouble { Temperature = Tsat, Density = rhoVGuess * M }.EnthalpyFast;
+                hL = new AmmoniaDouble { Temperature = Tsat, Density = rhoLGuess * M }.Enthalpy;
+                hV = new AmmoniaDouble { Temperature = Tsat, Density = rhoVGuess * M }.Enthalpy;
                 double dh = hV - hL;
 
                 if (dh > 1e-3)
@@ -191,7 +189,7 @@ public static partial class Update
             haveGuess = true;
             local.Temperature = TK;
             local.Density = rhomolar * M;
-            return local.EnthalpyFast;
+            return local.Enthalpy;
         }
 
         double flo = EvalWarm(lo) - hTarget;
