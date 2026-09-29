@@ -1,5 +1,5 @@
 using EngineeringFluids.Fluids;
-using EngineeringUnits;
+using EngineeringUnits.Fast;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SharpFluids;
 using System;
@@ -47,8 +47,8 @@ public class CoolPropOracle_UpdatePH_Tests
         const double relTol = 1e-5;
         const double absTolT_K = 1e-2;
 
-        var P = Pressure.FromPascal(PPa);
-        var T = Temperature.FromKelvin(TK);
+        var P = EngineeringUnits.Pressure.FromPascal(PPa);
+        var T = EngineeringUnits.Temperature.FromKelvin(TK);
         var refFluid = new Fluid(FluidList.Ammonia);
         refFluid.UpdatePT(P, T);
 
@@ -58,13 +58,13 @@ public class CoolPropOracle_UpdatePH_Tests
         double uRef = refFluid.InternalEnergy!.JoulePerKilogram;
 
         var a = new Ammonia();
-        a.UpdatePH(PPa, hRef);
+        a.UpdatePH(Pressure.FromPascal(PPa), Enthalpy.FromJoulePerKilogram(hRef));
 
         Assert.AreEqual(-1.0, a.Quality, "Single-phase result should report Quality=-1");
-        Assert.IsTrue(Math.Abs(a.Temperature - TK) <= absTolT_K, $"T mismatch: expected={TK}, actual={a.Temperature}");
-        Assert.IsTrue(RelErr(rhoRef, a.Density) <= relTol, $"rho mismatch: expected={rhoRef}, actual={a.Density}");
-        Assert.IsTrue(RelErr(sRef, a.Entropy) <= relTol, $"s mismatch: expected={sRef}, actual={a.Entropy}");
-        Assert.IsTrue(RelErr(uRef, a.InternalEnergy) <= relTol, $"u mismatch: expected={uRef}, actual={a.InternalEnergy}");
+        Assert.IsTrue(Math.Abs(a.Temperature.Kelvin - TK) <= absTolT_K, $"T mismatch: expected={TK}, actual={a.Temperature.Kelvin}");
+        Assert.IsTrue(RelErr(rhoRef, a.Density.KilogramPerCubicMeter) <= relTol, $"rho mismatch: expected={rhoRef}, actual={a.Density.KilogramPerCubicMeter}");
+        Assert.IsTrue(RelErr(sRef, a.Entropy.JoulePerKilogramKelvin) <= relTol, $"s mismatch: expected={sRef}, actual={a.Entropy.JoulePerKilogramKelvin}");
+        Assert.IsTrue(RelErr(uRef, a.InternalEnergy.JoulePerKilogram) <= relTol, $"u mismatch: expected={uRef}, actual={a.InternalEnergy.JoulePerKilogram}");
     }
 
     // ------------------------------------------------------------------
@@ -91,7 +91,7 @@ public class CoolPropOracle_UpdatePH_Tests
         const double absTolT_K = 1e-2;
         const double absTolQ = 1e-4;
 
-        var P = Pressure.FromBar(pBar);
+        var P = EngineeringUnits.Pressure.FromBar(pBar);
         var L = new Fluid(FluidList.Ammonia);
         L.UpdatePX(P, 0.0);
         var V = new Fluid(FluidList.Ammonia);
@@ -108,28 +108,28 @@ public class CoolPropOracle_UpdatePH_Tests
         double TsatRef = satFluid.Tsat!.Kelvin;
 
         var a = new Ammonia();
-        a.UpdatePH(P.Pascal, hMix);
+        a.UpdatePH(Pressure.FromPascal(P.Pascal), Enthalpy.FromJoulePerKilogram(hMix));
 
         Assert.AreEqual(EngineeringFluids.Helmholtz.Phase.Phases.Twophase, a.Phase, "Phase should be Twophase");
         Assert.IsTrue(Math.Abs(a.Quality - q) <= absTolQ, $"Quality mismatch: expected={q}, actual={a.Quality}");
-        Assert.IsTrue(Math.Abs(a.Temperature - TsatRef) <= absTolT_K, $"T mismatch: expected={TsatRef}, actual={a.Temperature}");
-        Assert.IsTrue(RelErr(rhoRef, a.Density) <= relTol, $"rho mismatch: expected={rhoRef}, actual={a.Density}");
+        Assert.IsTrue(Math.Abs(a.Temperature.Kelvin - TsatRef) <= absTolT_K, $"T mismatch: expected={TsatRef}, actual={a.Temperature.Kelvin}");
+        Assert.IsTrue(RelErr(rhoRef, a.Density.KilogramPerCubicMeter) <= relTol, $"rho mismatch: expected={rhoRef}, actual={a.Density.KilogramPerCubicMeter}");
     }
 
     [TestMethod]
     public void UpdatePH_Throws_ForNonPositivePressure()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePH(0.0, 1_000_000.0));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePH(-1.0, 1_000_000.0));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePH(Pressure.FromPascal(0.0), Enthalpy.FromJoulePerKilogram(1_000_000.0)));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePH(Pressure.FromPascal(-1.0), Enthalpy.FromJoulePerKilogram(1_000_000.0)));
     }
 
     [TestMethod]
     public void UpdatePH_Throws_ForNonFiniteEnthalpy()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePH(1_000_000.0, double.NaN));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePH(1_000_000.0, double.PositiveInfinity));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePH(Pressure.FromPascal(1_000_000.0), Enthalpy.FromJoulePerKilogram(double.NaN)));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePH(Pressure.FromPascal(1_000_000.0), Enthalpy.FromJoulePerKilogram(double.PositiveInfinity)));
     }
 
     // ------------------------------------------------------------------
@@ -175,7 +175,7 @@ public class CoolPropOracle_UpdatePH_Tests
             {
                 double PPa = Math.Exp(Math.Log(pLowTwoPhase) + rng.NextDouble() * (Math.Log(pHighTwoPhase) - Math.Log(pLowTwoPhase)));
                 double q = rng.NextDouble();
-                var P = Pressure.FromPascal(PPa);
+                var P = EngineeringUnits.Pressure.FromPascal(PPa);
 
                 var L = new Fluid(FluidList.Ammonia);
                 L.UpdatePX(P, 0.0);
@@ -202,7 +202,7 @@ public class CoolPropOracle_UpdatePH_Tests
                 double hRef = (1.0 - q) * L.Enthalpy.JoulePerKilogram + q * V.Enthalpy.JoulePerKilogram;
 
                 var a = new Ammonia();
-                try { a.UpdatePH(PPa, hRef); }
+                try { a.UpdatePH(Pressure.FromPascal(PPa), Enthalpy.FromJoulePerKilogram(hRef)); }
                 catch (Exception)
                 {
                     fail++; idx++;
@@ -210,9 +210,9 @@ public class CoolPropOracle_UpdatePH_Tests
                     continue;
                 }
 
-                double eRho = RelErr(rhoRef, a.Density);
+                double eRho = RelErr(rhoRef, a.Density.KilogramPerCubicMeter);
                 double eQ = Math.Abs(a.Quality - q);
-                double eT = Math.Abs(a.Temperature - Tsat.Kelvin);
+                double eT = Math.Abs(a.Temperature.Kelvin - Tsat.Kelvin);
                 bool ok = eRho <= relTol && eQ <= 1e-4 && eT <= absTolT_K && a.Phase == EngineeringFluids.Helmholtz.Phase.Phases.Twophase;
 
                 if (ok) pass++;
@@ -230,8 +230,8 @@ public class CoolPropOracle_UpdatePH_Tests
                 double PPa = Math.Exp(Math.Log(20_000.0) + rng.NextDouble() * (Math.Log(3.0 * Pc) - Math.Log(20_000.0)));
                 double TK = 195.6 + rng.NextDouble() * (700.0 - 195.6);
 
-                var P = Pressure.FromPascal(PPa);
-                var T = Temperature.FromKelvin(TK);
+                var P = EngineeringUnits.Pressure.FromPascal(PPa);
+                var T = EngineeringUnits.Temperature.FromKelvin(TK);
                 var refFluid = new Fluid(FluidList.Ammonia);
                 refFluid.UpdatePT(P, T);
                 if (refFluid.FailState || refFluid.Density == null || refFluid.Enthalpy == null
@@ -253,7 +253,7 @@ public class CoolPropOracle_UpdatePH_Tests
                 double uRef = refFluid.InternalEnergy.JoulePerKilogram;
 
                 var a = new Ammonia();
-                try { a.UpdatePH(PPa, hRef); }
+                try { a.UpdatePH(Pressure.FromPascal(PPa), Enthalpy.FromJoulePerKilogram(hRef)); }
                 catch (Exception)
                 {
                     fail++; idx++;
@@ -261,10 +261,10 @@ public class CoolPropOracle_UpdatePH_Tests
                     continue;
                 }
 
-                double eRho = RelErr(rhoRef, a.Density);
-                double eS = RelErr(sRef, a.Entropy);
-                double eU = RelErr(uRef, a.InternalEnergy);
-                double eT = Math.Abs(a.Temperature - TK);
+                double eRho = RelErr(rhoRef, a.Density.KilogramPerCubicMeter);
+                double eS = RelErr(sRef, a.Entropy.JoulePerKilogramKelvin);
+                double eU = RelErr(uRef, a.InternalEnergy.JoulePerKilogram);
+                double eT = Math.Abs(a.Temperature.Kelvin - TK);
                 bool ok = eRho <= relTol && eS <= relTol && eU <= relTol && eT <= absTolT_K;
 
                 if (ok) pass++;

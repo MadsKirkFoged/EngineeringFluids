@@ -1,5 +1,5 @@
 using EngineeringFluids.Fluids;
-using EngineeringUnits;
+using EngineeringUnits.Fast;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SharpFluids;
 using System;
@@ -44,7 +44,7 @@ public class CoolPropOracle_UpdateTX_Tests
         const double absTolP = 1.0; // Pa
 
         var refFluid = new Fluid(FluidList.Ammonia);
-        refFluid.UpdateXT(q, Temperature.FromKelvin(TK));
+        refFluid.UpdateXT(q, EngineeringUnits.Temperature.FromKelvin(TK));
 
         double pRef = refFluid.Pressure!.Pascal;
         double rhoRef = refFluid.Density!.KilogramPerCubicMeter;
@@ -53,28 +53,28 @@ public class CoolPropOracle_UpdateTX_Tests
         double uRef = refFluid.InternalEnergy!.JoulePerKilogram;
 
         var a = new Ammonia();
-        a.UpdateTX(TK, q);
+        a.UpdateTX(Temperature.FromKelvin(TK), q);
 
         Assert.AreEqual(EngineeringFluids.Helmholtz.Phase.Phases.Twophase, a.Phase, "Phase should be Twophase");
         Assert.IsTrue(Math.Abs(a.Quality - q) <= 1e-9, $"Quality mismatch: expected={q}, actual={a.Quality}");
-        Assert.IsTrue(Math.Abs(a.Temperature - TK) <= 1e-9, $"T mismatch: expected={TK}, actual={a.Temperature}");
-        Assert.IsTrue(Math.Abs(a.Pressure - pRef) <= Math.Max(absTolP, relTol * pRef), $"P mismatch: expected={pRef}, actual={a.Pressure}");
-        Assert.IsTrue(RelErr(rhoRef, a.Density) <= relTol, $"rho mismatch: expected={rhoRef}, actual={a.Density}");
-        Assert.IsTrue(RelErr(hRef, a.Enthalpy) <= relTol, $"h mismatch: expected={hRef}, actual={a.Enthalpy}");
-        Assert.IsTrue(RelErr(sRef, a.Entropy) <= relTol, $"s mismatch: expected={sRef}, actual={a.Entropy}");
-        Assert.IsTrue(RelErr(uRef, a.InternalEnergy) <= relTol, $"u mismatch: expected={uRef}, actual={a.InternalEnergy}");
+        Assert.IsTrue(Math.Abs(a.Temperature.Kelvin - TK) <= 1e-9, $"T mismatch: expected={TK}, actual={a.Temperature.Kelvin}");
+        Assert.IsTrue(Math.Abs(a.Pressure.Pascal - pRef) <= Math.Max(absTolP, relTol * pRef), $"P mismatch: expected={pRef}, actual={a.Pressure.Pascal}");
+        Assert.IsTrue(RelErr(rhoRef, a.Density.KilogramPerCubicMeter) <= relTol, $"rho mismatch: expected={rhoRef}, actual={a.Density.KilogramPerCubicMeter}");
+        Assert.IsTrue(RelErr(hRef, a.Enthalpy.JoulePerKilogram) <= relTol, $"h mismatch: expected={hRef}, actual={a.Enthalpy.JoulePerKilogram}");
+        Assert.IsTrue(RelErr(sRef, a.Entropy.JoulePerKilogramKelvin) <= relTol, $"s mismatch: expected={sRef}, actual={a.Entropy.JoulePerKilogramKelvin}");
+        Assert.IsTrue(RelErr(uRef, a.InternalEnergy.JoulePerKilogram) <= relTol, $"u mismatch: expected={uRef}, actual={a.InternalEnergy.JoulePerKilogram}");
     }
 
     [TestMethod]
     public void UpdateXT_MatchesUpdateTX()
     {
         var a = new Ammonia();
-        a.UpdateTX(280.0, 0.3);
+        a.UpdateTX(Temperature.FromKelvin(280.0), 0.3);
         var b = new Ammonia();
-        b.UpdateXT(0.3, 280.0);
+        b.UpdateXT(0.3, Temperature.FromKelvin(280.0));
 
-        Assert.AreEqual(a.Temperature, b.Temperature);
-        Assert.AreEqual(a.Density, b.Density);
+        Assert.AreEqual(a.Temperature.Kelvin, b.Temperature.Kelvin);
+        Assert.AreEqual(a.Density.KilogramPerCubicMeter, b.Density.KilogramPerCubicMeter);
         Assert.AreEqual(a.Quality, b.Quality);
     }
 
@@ -82,31 +82,31 @@ public class CoolPropOracle_UpdateTX_Tests
     public void UpdateTX_Throws_ForInvalidQuality()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(280.0, -0.1));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(280.0, 1.1));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(280.0, double.NaN));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(Temperature.FromKelvin(280.0), -0.1));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(Temperature.FromKelvin(280.0), 1.1));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdateTX(Temperature.FromKelvin(280.0), double.NaN));
     }
 
     [TestMethod]
     public void UpdateTX_Throws_AtOrAboveTc()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Tc, 0.5));
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Tc + 5.0, 0.5));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Temperature.FromKelvin(Tc), 0.5));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Temperature.FromKelvin(Tc + 5.0), 0.5));
     }
 
     [TestMethod]
     public void UpdateTX_Throws_BelowTripleTemperature()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Ttriple - 1.0, 0.5));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Temperature.FromKelvin(Ttriple - 1.0), 0.5));
     }
 
     [TestMethod]
     public void UpdateTX_Throws_NearCriticalPoint()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Tc - 0.5, 0.5));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Temperature.FromKelvin(Tc - 0.5), 0.5));
     }
 
     // ------------------------------------------------------------------
@@ -146,7 +146,7 @@ public class CoolPropOracle_UpdateTX_Tests
             double q = rng.NextDouble();
 
             var refFluid = new Fluid(FluidList.Ammonia);
-            refFluid.UpdateXT(q, Temperature.FromKelvin(TK));
+            refFluid.UpdateXT(q, EngineeringUnits.Temperature.FromKelvin(TK));
             if (refFluid.FailState || refFluid.Density == null || refFluid.Pressure == null
                 || refFluid.Enthalpy == null || refFluid.Entropy == null || refFluid.InternalEnergy == null)
             {
@@ -161,7 +161,7 @@ public class CoolPropOracle_UpdateTX_Tests
             double uRef = refFluid.InternalEnergy.JoulePerKilogram;
 
             var a = new Ammonia();
-            try { a.UpdateTX(TK, q); }
+            try { a.UpdateTX(Temperature.FromKelvin(TK), q); }
             catch (Exception)
             {
                 fail++; idx++;
@@ -169,11 +169,11 @@ public class CoolPropOracle_UpdateTX_Tests
                 continue;
             }
 
-            double eP = RelErr(pRef, a.Pressure);
-            double eRho = RelErr(rhoRef, a.Density);
-            double eH = RelErr(hRef, a.Enthalpy);
-            double eS = RelErr(sRef, a.Entropy);
-            double eU = RelErr(uRef, a.InternalEnergy);
+            double eP = RelErr(pRef, a.Pressure.Pascal);
+            double eRho = RelErr(rhoRef, a.Density.KilogramPerCubicMeter);
+            double eH = RelErr(hRef, a.Enthalpy.JoulePerKilogram);
+            double eS = RelErr(sRef, a.Entropy.JoulePerKilogramKelvin);
+            double eU = RelErr(uRef, a.InternalEnergy.JoulePerKilogram);
             bool ok = eP <= relTol && eRho <= relTol && eH <= relTol && eS <= relTol && eU <= relTol;
 
             if (ok) pass++;

@@ -1,16 +1,27 @@
 ﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Jobs;
 using SharpFluids;
 using EngineeringFluids.Fluids;
-using EngineeringUnits;
+using EngineeringUnits.Fast;
 
 namespace Benchmark;
 
-[ShortRunJob]
+// BenchmarkDotNet compiles a generated wrapper project with RunAnalyzers=false, which the
+// EngineeringUnits.Fast build guard (EUF1000) rejects. The wrapper holds no unit code, and this
+// project and EngineeringFluids are still compiled with the analyzer, so only the guard is lifted.
+public class ShortRunFastUnitsConfig : ManualConfig
+{
+    public ShortRunFastUnitsConfig() =>
+        AddJob(Job.ShortRun.WithArguments([new MsBuildArgument("/p:EngineeringUnitsFastAllowNoAnalyzer=true")]));
+}
+
+[Config(typeof(ShortRunFastUnitsConfig))]
 [MemoryDiagnoser]
 public class Benchy
 {
-    private static readonly Pressure pressure = Pressure.FromBar(21);
-    private static readonly Temperature temperature = Temperature.FromDegreeCelsius(100);
+    private static readonly EngineeringUnits.Pressure pressure = EngineeringUnits.Pressure.FromBar(21);
+    private static readonly EngineeringUnits.Temperature temperature = EngineeringUnits.Temperature.FromDegreeCelsius(100);
 
     private static readonly double pressured = 2100000; // Pressure.FromBar(21).SI;
     private static readonly double temperatured = 373.15; // Temperature.FromDegreeCelsius(100).SI;
@@ -34,7 +45,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdatePT()
     {
-        EngineeringFluid.UpdatePT(pressured, temperatured);
+        EngineeringFluid.UpdatePT(Pressure.FromPascal(pressured), Temperature.FromKelvin(temperatured));
     }
 
     // ---------------------------------------------------------------------
@@ -49,7 +60,7 @@ public class Benchy
     private static readonly Ammonia EngineeringFluidPX = new Ammonia();
     private static readonly AbstractState CoolPropStatePX = AbstractState.factory("HEOS", "Ammonia");
 
-    private static readonly Pressure pxPressure = Pressure.FromPascal(1_000_000);
+    private static readonly EngineeringUnits.Pressure pxPressure = EngineeringUnits.Pressure.FromPascal(1_000_000);
     private static readonly double pxPressured = 1_000_000;
     private static readonly double pxQuality = 0.5;
 
@@ -68,7 +79,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdatePX()
     {
-        EngineeringFluidPX.UpdatePX(pxPressured, pxQuality);
+        EngineeringFluidPX.UpdatePX(Pressure.FromPascal(pxPressured), pxQuality);
     }
 
     // ---------------------------------------------------------------------
@@ -84,8 +95,8 @@ public class Benchy
     private static readonly Ammonia EngineeringFluidPH = new Ammonia();
     private static readonly AbstractState CoolPropStatePH = AbstractState.factory("HEOS", "Ammonia");
 
-    private static readonly Pressure phPressure = Pressure.FromPascal(2_100_000);
-    private static readonly SpecificEnergy phEnthalpy = SpecificEnergy.FromJoulePerKilogram(1_792_554.16228943);
+    private static readonly EngineeringUnits.Pressure phPressure = EngineeringUnits.Pressure.FromPascal(2_100_000);
+    private static readonly EngineeringUnits.SpecificEnergy phEnthalpy = EngineeringUnits.SpecificEnergy.FromJoulePerKilogram(1_792_554.16228943);
     private static readonly double phPressured = 2_100_000;
     private static readonly double phEnthalpyd = 1_792_554.16228943;
 
@@ -93,8 +104,8 @@ public class Benchy
     private static readonly Ammonia EngineeringFluidPH2P = new Ammonia();
     private static readonly AbstractState CoolPropStatePH2P = AbstractState.factory("HEOS", "Ammonia");
 
-    private static readonly Pressure ph2pPressure = Pressure.FromPascal(1_000_000);
-    private static readonly SpecificEnergy ph2pEnthalpy = SpecificEnergy.FromJoulePerKilogram(1_045_846.5);
+    private static readonly EngineeringUnits.Pressure ph2pPressure = EngineeringUnits.Pressure.FromPascal(1_000_000);
+    private static readonly EngineeringUnits.SpecificEnergy ph2pEnthalpy = EngineeringUnits.SpecificEnergy.FromJoulePerKilogram(1_045_846.5);
     private static readonly double ph2pPressured = 1_000_000;
     private static readonly double ph2pEnthalpyd = 1_045_846.5;
 
@@ -113,7 +124,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdatePH()
     {
-        EngineeringFluidPH.UpdatePH(phPressured, phEnthalpyd);
+        EngineeringFluidPH.UpdatePH(Pressure.FromPascal(phPressured), Enthalpy.FromJoulePerKilogram(phEnthalpyd));
     }
 
     [Benchmark]
@@ -131,7 +142,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdatePH_TwoPhase()
     {
-        EngineeringFluidPH2P.UpdatePH(ph2pPressured, ph2pEnthalpyd);
+        EngineeringFluidPH2P.UpdatePH(Pressure.FromPascal(ph2pPressured), Enthalpy.FromJoulePerKilogram(ph2pEnthalpyd));
     }
 
     // ---------------------------------------------------------------------
@@ -146,31 +157,31 @@ public class Benchy
     private static readonly Ammonia EngineeringFluidPS = new Ammonia();
     private static readonly AbstractState CoolPropStatePS = AbstractState.factory("HEOS", "Ammonia");
 
-    private static readonly Pressure psPressure = Pressure.FromPascal(2_100_000);
+    private static readonly EngineeringUnits.Pressure psPressure = EngineeringUnits.Pressure.FromPascal(2_100_000);
     private static readonly double psPressured = 2_100_000;
-    private static readonly SpecificEntropy psEntropy = EntropyAtPT(2_100_000, 373.15);
+    private static readonly EngineeringUnits.SpecificEntropy psEntropy = EntropyAtPT(2_100_000, 373.15);
     private static readonly double psEntropyd = psEntropy.JoulePerKilogramKelvin;
 
     private static readonly Fluid SharpFluidPS2P = new Fluid(FluidList.Ammonia);
     private static readonly Ammonia EngineeringFluidPS2P = new Ammonia();
     private static readonly AbstractState CoolPropStatePS2P = AbstractState.factory("HEOS", "Ammonia");
 
-    private static readonly Pressure ps2pPressure = Pressure.FromPascal(1_000_000);
+    private static readonly EngineeringUnits.Pressure ps2pPressure = EngineeringUnits.Pressure.FromPascal(1_000_000);
     private static readonly double ps2pPressured = 1_000_000;
-    private static readonly SpecificEntropy ps2pEntropy = EntropyAtPX(1_000_000, 0.5);
+    private static readonly EngineeringUnits.SpecificEntropy ps2pEntropy = EntropyAtPX(1_000_000, 0.5);
     private static readonly double ps2pEntropyd = ps2pEntropy.JoulePerKilogramKelvin;
 
-    private static SpecificEntropy EntropyAtPT(double pPa, double tK)
+    private static EngineeringUnits.SpecificEntropy EntropyAtPT(double pPa, double tK)
     {
         var f = new Fluid(FluidList.Ammonia);
-        f.UpdatePT(Pressure.FromPascal(pPa), Temperature.FromKelvin(tK));
+        f.UpdatePT(EngineeringUnits.Pressure.FromPascal(pPa), EngineeringUnits.Temperature.FromKelvin(tK));
         return f.Entropy!;
     }
 
-    private static SpecificEntropy EntropyAtPX(double pPa, double quality)
+    private static EngineeringUnits.SpecificEntropy EntropyAtPX(double pPa, double quality)
     {
         var f = new Fluid(FluidList.Ammonia);
-        f.UpdatePX(Pressure.FromPascal(pPa), quality);
+        f.UpdatePX(EngineeringUnits.Pressure.FromPascal(pPa), quality);
         return f.Entropy!;
     }
 
@@ -189,7 +200,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdatePS()
     {
-        EngineeringFluidPS.UpdatePS(psPressured, psEntropyd);
+        EngineeringFluidPS.UpdatePS(Pressure.FromPascal(psPressured), SpecificEntropy.FromJoulePerKilogramKelvin(psEntropyd));
     }
 
     [Benchmark]
@@ -207,7 +218,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdatePS_TwoPhase()
     {
-        EngineeringFluidPS2P.UpdatePS(ps2pPressured, ps2pEntropyd);
+        EngineeringFluidPS2P.UpdatePS(Pressure.FromPascal(ps2pPressured), SpecificEntropy.FromJoulePerKilogramKelvin(ps2pEntropyd));
     }
 
     // ---------------------------------------------------------------------
@@ -221,7 +232,7 @@ public class Benchy
     private static readonly Ammonia EngineeringFluidTX = new Ammonia();
     private static readonly AbstractState CoolPropStateTX = AbstractState.factory("HEOS", "Ammonia");
 
-    private static readonly Temperature txTemperature = Temperature.FromKelvin(280.0);
+    private static readonly EngineeringUnits.Temperature txTemperature = EngineeringUnits.Temperature.FromKelvin(280.0);
     private static readonly double txTemperatured = 280.0;
     private static readonly double txQuality = 0.5;
 
@@ -240,7 +251,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdateTX()
     {
-        EngineeringFluidTX.UpdateTX(txTemperatured, txQuality);
+        EngineeringFluidTX.UpdateTX(Temperature.FromKelvin(txTemperatured), txQuality);
     }
 
     // ---------------------------------------------------------------------
@@ -255,7 +266,7 @@ public class Benchy
     [Benchmark]
     public void EngineeringUpdateTXExact()
     {
-        EngineeringFluidTXExact.UpdateTXExact(txTemperatured, txQuality);
+        EngineeringFluidTXExact.UpdateTXExact(Temperature.FromKelvin(txTemperatured), txQuality);
     }
 
     // ---------------------------------------------------------------------
@@ -273,20 +284,20 @@ public class Benchy
     // ---------------------------------------------------------------------
 
     private static readonly Ammonia GasNearDomeFluid = new Ammonia();
-    private static readonly double gasNearDomePressure = 5_630_000; // ~0.9x Psat(373.15K): gas, close to the dew line
-    private static readonly double gasNearDomeTemperature = 373.15;
+    private static readonly Pressure gasNearDomePressure = Pressure.FromPascal(5_630_000); // ~0.9x Psat(373.15K): gas, close to the dew line
+    private static readonly Temperature gasNearDomeTemperature = Temperature.FromKelvin(373.15);
 
     private static readonly Ammonia LiquidFluid = new Ammonia();
-    private static readonly double liquidPressure = 2_100_000;
-    private static readonly double liquidTemperature = 280.0; // subcooled liquid
+    private static readonly Pressure liquidPressure = Pressure.FromPascal(2_100_000);
+    private static readonly Temperature liquidTemperature = Temperature.FromKelvin(280.0); // subcooled liquid
 
     private static readonly Ammonia SupercriticalTypicalFluid = new Ammonia();
-    private static readonly double supercriticalTypicalPressure = 15_000_000; // ~1.3x Pc, comfortably away from Tc
-    private static readonly double supercriticalTypicalTemperature = 500.0;
+    private static readonly Pressure supercriticalTypicalPressure = Pressure.FromPascal(15_000_000); // ~1.3x Pc, comfortably away from Tc
+    private static readonly Temperature supercriticalTypicalTemperature = Temperature.FromKelvin(500.0);
 
     private static readonly Ammonia SupercriticalNearCriticalFluid = new Ammonia();
-    private static readonly double supercriticalNearCriticalPressure = 14_158_915.68768298; // worst case found while sweeping the supercritical region
-    private static readonly double supercriticalNearCriticalTemperature = 406.56; // 1 K above Tc=405.56K
+    private static readonly Pressure supercriticalNearCriticalPressure = Pressure.FromPascal(14_158_915.68768298); // worst case found while sweeping the supercritical region
+    private static readonly Temperature supercriticalNearCriticalTemperature = Temperature.FromKelvin(406.56); // 1 K above Tc=405.56K
 
     [Benchmark]
     public void Gas_NearDome()

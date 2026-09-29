@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="EngineeringUnits.Fast" Version="2.2.149" />
     <PackageReference Include="Kolbe.LitMath" Version="0.7.0" />
   </ItemGroup>
 </Project>

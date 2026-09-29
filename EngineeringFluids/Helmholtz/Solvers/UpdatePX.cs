@@ -1,8 +1,13 @@
 using EngineeringFluids.Fluids;
 using EngineeringFluids.Helmholtz.Solvers;
+using EngineeringUnits.Fast;
 
 public static partial class Update
 {
+    // The ancillary-based two-phase flashes (UpdatePX/UpdateTX/UpdatePH/UpdatePS) are not
+    // trusted within this distance below Tc - see the remarks on UpdatePX.
+    private static readonly Temperature CriticalMargin = Temperature.FromKelvin(1.0);
+
     // Pressure + vapor-quality flash: sets a two-phase saturated state
     // at pTarget with mass quality `quality` (0 = saturated liquid, 1 = saturated vapor).
     //
@@ -25,34 +30,34 @@ public static partial class Update
     // relative terms - the exact same critical-point fragility already found and documented
     // for UpdatePT (both CoolProp's own saturation solver and this EOS struggle there). That
     // region is explicitly rejected below rather than silently returning a bad answer.
-    public static void UpdatePX(this Ammonia local, double pTarget, double quality)
+    public static void UpdatePX(this Ammonia local, Pressure pTarget, double quality)
     {
         if (double.IsNaN(quality) || quality < 0.0 || quality > 1.0)
             throw new System.ArgumentOutOfRangeException(nameof(quality), "Quality must be in [0,1].");
 
-        double Tc = local.Critical.Temperature;
-        double Pc = local.Critical.Pressure;
-        double Ptriple = local.TripleLiquid.Pressure;
+        Temperature Tc = local.Critical.Temperature;
+        Pressure Pc = local.Critical.Pressure;
+        Pressure Ptriple = local.TripleLiquid.Pressure;
 
-        if (!double.IsFinite(pTarget) || pTarget < Ptriple)
+        if (!double.IsFinite(pTarget.Pascal) || pTarget < Ptriple)
             throw new System.ArgumentOutOfRangeException(nameof(pTarget),
-                $"UpdatePX: pressure below the triple-point pressure ({Ptriple} Pa) has no liquid-vapor equilibrium. P={pTarget} Pa.");
+                $"UpdatePX: pressure below the triple-point pressure ({Ptriple.Pascal} Pa) has no liquid-vapor equilibrium. P={pTarget.Pascal} Pa.");
 
         if (pTarget >= Pc)
             throw new System.InvalidOperationException(
-                $"UpdatePX invalid at/above the critical pressure. P={pTarget} Pa, Pc={Pc} Pa.");
+                $"UpdatePX invalid at/above the critical pressure. P={pTarget.Pascal} Pa, Pc={Pc.Pascal} Pa.");
 
-        double Tsat = SaturationTemperature.Temperature((float)pTarget);
+        Temperature Tsat = SaturationTemperature.Temperature(pTarget);
 
         // Ancillary-based rhoL/rhoV lose accuracy fast in the last ~1 K below Tc (see remarks
         // above) - reject rather than silently return an inaccurate two-phase state there.
-        if (Tc - Tsat < 1.0)
+        if (Tc - Tsat < CriticalMargin)
             throw new System.InvalidOperationException(
                 $"UpdatePX: pressure too close to the critical point for a reliable fast ancillary-based " +
-                $"two-phase solve (Tc-Tsat={Tc - Tsat:G3} K). P={pTarget} Pa. Use UpdatePT with a phase hint instead.");
+                $"two-phase solve (Tc-Tsat={(Tc - Tsat).Kelvin:G3} K). P={pTarget.Pascal} Pa. Use UpdatePT with a phase hint instead.");
 
-        double rhoL = BubbleDensity.Density((float)Tsat);
-        double rhoV = DewDensity.Density((float)Tsat);
+        Molarity rhoL = BubbleDensity.Density(Tsat);
+        Molarity rhoV = DewDensity.Density(Tsat);
 
         var sat = new SaturationSolver.SatResult(Tsat, pTarget, rhoL, rhoV);
         local.SetTwoPhase(sat, quality);

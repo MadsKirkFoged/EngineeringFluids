@@ -1,3 +1,4 @@
+using EngineeringUnits.Fast;
 using System;
 using System.Runtime.CompilerServices;
 
@@ -19,8 +20,11 @@ public static class SaturationTemperature
     private const float Tmax = SaturationPressure.Tmax;
     private const int Iterations = 30;
 
+    public static EngineeringUnits.Fast.Temperature Temperature(Pressure p)
+        => EngineeringUnits.Fast.Temperature.FromKelvin(Temperature((float)p.Pascal));
+
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    public static float Temperature(float pressurePa)
+    internal static float Temperature(float pressurePa)
     {
         float lo = Tmin, hi = Tmax;
 

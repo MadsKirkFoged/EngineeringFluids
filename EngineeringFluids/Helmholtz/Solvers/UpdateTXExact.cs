@@ -1,5 +1,6 @@
 using EngineeringFluids.Fluids;
 using EngineeringFluids.Helmholtz.Solvers;
+using EngineeringUnits.Fast;
 using System;
 
 public static partial class Update
@@ -24,24 +25,24 @@ public static partial class Update
     // own pressure/fugacity residuals stay excellent (~1e-8 Pa / ~1e-14) right up to 0.001 K
     // from Tc regardless - there just isn't an independent oracle left to confirm it against
     // that close.
-    public static void UpdateTXExact(this Ammonia local, double tTarget, double quality)
+    public static void UpdateTXExact(this Ammonia local, Temperature tTarget, double quality)
     {
         if (double.IsNaN(quality) || quality < 0.0 || quality > 1.0)
             throw new ArgumentOutOfRangeException(nameof(quality), "Quality must be in [0,1].");
 
-        double Tc = local.Critical.Temperature;
-        double Ttriple = local.TripleLiquid.Temperature;
+        Temperature Tc = local.Critical.Temperature;
+        Temperature Ttriple = local.TripleLiquid.Temperature;
 
-        if (!double.IsFinite(tTarget) || tTarget >= Tc)
-            throw new InvalidOperationException($"UpdateTXExact invalid at/above Tc. T={tTarget} K.");
+        if (!double.IsFinite(tTarget.Kelvin) || tTarget >= Tc)
+            throw new InvalidOperationException($"UpdateTXExact invalid at/above Tc. T={tTarget.Kelvin} K.");
         if (tTarget <= Ttriple)
-            throw new InvalidOperationException($"UpdateTXExact invalid at/below triple temperature. T={tTarget} K.");
+            throw new InvalidOperationException($"UpdateTXExact invalid at/below triple temperature. T={tTarget.Kelvin} K.");
 
         var sat = local.SolveAtT(tTarget);
         local.SetTwoPhase(sat, quality);
     }
 
     // Alias to match SharpFluids naming (Quality, Temperature) - see UpdateTX.cs's UpdateXT.
-    public static void UpdateXTExact(this Ammonia local, double quality, double tTarget)
+    public static void UpdateXTExact(this Ammonia local, double quality, Temperature tTarget)
         => UpdateTXExact(local, tTarget, quality);
 }

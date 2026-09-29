@@ -1,5 +1,6 @@
 using EngineeringFluids.Fluids;
 using EngineeringFluids.Helmholtz.Solvers;
+using EngineeringUnits.Fast;
 using System;
 
 public static partial class Update
@@ -25,36 +26,36 @@ public static partial class Update
     // band, where the ancillaries are unconditionally unreliable) since accuracy degrades
     // gradually rather than breaking down - callers needing tight tolerances within ~15 K of
     // either endpoint should verify against UpdatePT instead. [benchmark-guided]
-    public static void UpdateTX(this Ammonia local, double tTarget, double quality)
+    public static void UpdateTX(this Ammonia local, Temperature tTarget, double quality)
     {
         if (double.IsNaN(quality) || quality < 0.0 || quality > 1.0)
             throw new ArgumentOutOfRangeException(nameof(quality), "Quality must be in [0,1].");
 
-        double Tc = local.Critical.Temperature;
-        double Ttriple = local.TripleLiquid.Temperature;
+        Temperature Tc = local.Critical.Temperature;
+        Temperature Ttriple = local.TripleLiquid.Temperature;
 
-        if (!double.IsFinite(tTarget) || tTarget >= Tc)
-            throw new InvalidOperationException($"UpdateTX invalid at/above Tc. T={tTarget} K.");
+        if (!double.IsFinite(tTarget.Kelvin) || tTarget >= Tc)
+            throw new InvalidOperationException($"UpdateTX invalid at/above Tc. T={tTarget.Kelvin} K.");
 
         if (tTarget < Ttriple)
-            throw new InvalidOperationException($"UpdateTX invalid below triple temperature. T={tTarget} K.");
+            throw new InvalidOperationException($"UpdateTX invalid below triple temperature. T={tTarget.Kelvin} K.");
 
         // Ancillary-based rhoL/rhoV lose accuracy fast in the last ~1 K below Tc (see remarks
         // above) - reject rather than silently return an inaccurate two-phase state there.
-        if (Tc - tTarget < 1.0)
+        if (Tc - tTarget < CriticalMargin)
             throw new InvalidOperationException(
                 $"UpdateTX: temperature too close to the critical point for a reliable fast ancillary-based " +
-                $"two-phase solve (Tc-T={Tc - tTarget:G3} K). T={tTarget} K. Use UpdatePT with a phase hint instead.");
+                $"two-phase solve (Tc-T={(Tc - tTarget).Kelvin:G3} K). T={tTarget.Kelvin} K. Use UpdatePT with a phase hint instead.");
 
-        double psat = SaturationPressure.Pressure((float)tTarget);
-        double rhoL = BubbleDensity.Density((float)tTarget);
-        double rhoV = DewDensity.Density((float)tTarget);
+        Pressure psat = SaturationPressure.Pressure(tTarget);
+        Molarity rhoL = BubbleDensity.Density(tTarget);
+        Molarity rhoV = DewDensity.Density(tTarget);
 
         var sat = new SaturationSolver.SatResult(tTarget, psat, rhoL, rhoV);
         local.SetTwoPhase(sat, quality);
     }
 
     // Alias to match SharpFluids naming (Quality, Temperature).
-    public static void UpdateXT(this Ammonia local, double quality, double tTarget)
+    public static void UpdateXT(this Ammonia local, double quality, Temperature tTarget)
         => UpdateTX(local, tTarget, quality);
 }

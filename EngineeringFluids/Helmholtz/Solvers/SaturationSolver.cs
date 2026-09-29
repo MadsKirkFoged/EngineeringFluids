@@ -1,4 +1,5 @@
 ﻿using EngineeringFluids.Fluids;
+using EngineeringUnits.Fast;
 using System;
 
 namespace EngineeringFluids.Helmholtz.Solvers;
@@ -6,10 +7,10 @@ namespace EngineeringFluids.Helmholtz.Solvers;
 public static class SaturationSolver
 {
     public sealed record SatResult(
-    double T,
-    double Psat,
-    double RhomolarL,
-    double RhomolarV);
+    Temperature T,
+    Pressure Psat,
+    Molarity RhomolarL,
+    Molarity RhomolarV);
 
     // Rigorous saturation solve: equal pressure + equal fugacity between the two branches,
     // damped Newton in log-density space u=ln(rhoV), w=ln(rhoL/rhoV). Unlike
@@ -27,28 +28,28 @@ public static class SaturationSolver
     // corresponding-states or Clausius-Clapeyron estimate, or continuation from a temperature
     // where a guess IS available) - only this seed step, not the Newton iteration itself,
     // would need to change per fluid.
-    public static SatResult SolveAtT(this Ammonia local, double T)
+    public static SatResult SolveAtT(this Ammonia local, Temperature T)
     {
-        double Ttriple = local.TripleLiquid.Temperature;
-        double Tc = local.Critical.Temperature;
+        Temperature Ttriple = local.TripleLiquid.Temperature;
+        Temperature Tc = local.Critical.Temperature;
 
-        if (!double.IsFinite(T) || T <= Ttriple || T >= Tc)
+        if (!double.IsFinite(T.Kelvin) || T <= Ttriple || T >= Tc)
             throw new ArgumentOutOfRangeException(nameof(T), "T must be between triple and critical for saturation.");
 
-        double M = local.MolarMass;
-        double rhoRed = local.Critical.MolarDensity;
+        MolarMass M = local.MolarMass;
+        Molarity rhoRed = local.Critical.MolarDensity;
 
-        double rhoL = BubbleDensity.Density((float)T);
-        double rhoV = DewDensity.Density((float)T);
+        Molarity rhoL = BubbleDensity.Density(T);
+        Molarity rhoV = DewDensity.Density(T);
 
-        if (rhoV <= 0 || rhoL <= 0 || rhoV >= rhoL)
+        if (rhoV <= Molarity.Zero || rhoL <= Molarity.Zero || rhoV >= rhoL)
         {
-            rhoV = Math.Max(1e-8, rhoV);
-            rhoL = Math.Max(rhoV * 10.0, rhoL);
+            rhoV = Molarity.Max(Molarity.FromMolesPerCubicMeter(1e-8), rhoV);
+            rhoL = Molarity.Max(rhoV * 10.0, rhoL);
         }
 
         const int maxIts = 80;
-        const double tolP = 1e-2;
+        Pressure tolP = Pressure.FromPascal(1e-2);
         // 1e-12 turned out unreachable at some low-T points: the
         // residual settles at the floating-point noise floor (observed oscillating around
         // ~1e-12 to 1e-6, never both below 1e-12 at once) once Newton has genuinely converged
@@ -57,61 +58,62 @@ public static class SaturationSolver
         // that floor everywhere tested. [benchmark-guided]
         const double tolLnPhi = 1e-10;
 
-        static Ammonia State(double t, double rhomolar, double m) => new Ammonia
+        static Ammonia State(Temperature t, Molarity rhomolar, MolarMass m) => new Ammonia
         {
             Temperature = t,
             Density = rhomolar * m
         };
 
-        double u = Math.Log(rhoV);
-        double w = Math.Log(rhoL / rhoV);
+        // Newton runs in log-density space, so the logarithms are taken of the plain mol/m3 values.
+        double u = Math.Log(rhoV.MolesPerCubicMeter);
+        double w = Math.Log((double)(rhoL / rhoV));
 
-        double rhoMin = 1e-12;
-        double rhoMax = 10.0 * rhoRed;
+        Molarity rhoMin = Molarity.FromMolesPerCubicMeter(1e-12);
+        Molarity rhoMax = 10.0 * rhoRed;
 
         for (int iter = 0; iter < maxIts; iter++)
         {
-            rhoV = Math.Exp(u);
-            rhoL = Math.Exp(u + w);
+            rhoV = Molarity.FromMolesPerCubicMeter(Math.Exp(u));
+            rhoL = Molarity.FromMolesPerCubicMeter(Math.Exp(u + w));
 
             var V = State(T, rhoV, M);
             var L = State(T, rhoL, M);
 
-            double pV = V.Pressure;
-            double pL = L.Pressure;
+            Pressure pV = V.Pressure;
+            Pressure pL = L.Pressure;
 
             double lnphiV = V.LNFugacityCoefficient;
             double lnphiL = L.LNFugacityCoefficient;
 
-            double F1 = pL - pV;
+            Pressure F1 = pL - pV;
             double F2 = lnphiL - lnphiV;
 
-            if (Math.Abs(F1) < tolP && Math.Abs(F2) < tolLnPhi)
+            if (F1.Abs() < tolP && Math.Abs(F2) < tolLnPhi)
             {
-                double psat = 0.5 * (pL + pV);
+                Pressure psat = 0.5 * (pL + pV);
                 return new SatResult(T, psat, rhoL, rhoV);
             }
 
-            double dpL = L.dp_drhomolar_constT_SI;
-            double dpV = V.dp_drhomolar_constT_SI;
+            MolarEnergy dpL = L.dp_drhomolar_constT;
+            MolarEnergy dpV = V.dp_drhomolar_constT;
 
-            double dlnphiL = L.dLnPhi_dRhomolar_constT_SI;
-            double dlnphiV = V.dLnPhi_dRhomolar_constT_SI;
+            var dlnphiL = L.dLnPhi_dRhomolar_constT;
+            var dlnphiV = V.dLnPhi_dRhomolar_constT;
 
-            double a11 = dpL * rhoL - dpV * rhoV;
-            double a12 = dpL * rhoL;
-            double a21 = dlnphiL * rhoL - dlnphiV * rhoV;
-            double a22 = dlnphiL * rhoL;
+            Pressure a11 = dpL * rhoL - dpV * rhoV;
+            Pressure a12 = dpL * rhoL;
+            double a21 = (double)(dlnphiL * rhoL - dlnphiV * rhoV);
+            double a22 = (double)(dlnphiL * rhoL);
 
-            double det = a11 * a22 - a12 * a21;
-            if (!double.IsFinite(det) || Math.Abs(det) < 1e-30)
+            Pressure det = a11 * a22 - a12 * a21;
+            if (!det.HasValue() || det.Abs() < Pressure.FromPascal(1e-30))
                 throw new InvalidOperationException($"Saturation Jacobian singular at iter {iter}.");
 
-            double b1 = -F1;
+            Pressure b1 = -F1;
             double b2 = -F2;
 
-            double du = (b1 * a22 - a12 * b2) / det;
-            double dw = (a11 * b2 - b1 * a21) / det;
+            double du = (double)((b1 * a22 - a12 * b2) / det);
+            double dw = (double)((a11 * b2 - b1 * a21) / det);
 
             // The noise floor above varies from point to point (observed ~1e-12 at one T,
             // ~1.7e-10 at another) - no fixed tolLnPhi clears it everywhere. Once Newton's own
@@ -120,9 +122,9 @@ public static class SaturationSolver
             // between floating-point-adjacent values, never actually improving F2 - accept the
             // current point rather than exhaust maxIts chasing a residual below the noise
             // floor. [benchmark-guided]
-            if (Math.Abs(F1) < tolP && Math.Abs(du) < 1e-11 && Math.Abs(dw) < 1e-11)
+            if (F1.Abs() < tolP && Math.Abs(du) < 1e-11 && Math.Abs(dw) < 1e-11)
             {
-                double psat = 0.5 * (pL + pV);
+                Pressure psat = 0.5 * (pL + pV);
                 return new SatResult(T, psat, rhoL, rhoV);
             }
 
@@ -134,8 +136,8 @@ public static class SaturationSolver
                 double uTry = u + lambda * du;
                 double wTry = w + lambda * dw;
 
-                double rhoVTry = Math.Exp(uTry);
-                double rhoLTry = Math.Exp(uTry + wTry);
+                Molarity rhoVTry = Molarity.FromMolesPerCubicMeter(Math.Exp(uTry));
+                Molarity rhoLTry = Molarity.FromMolesPerCubicMeter(Math.Exp(uTry + wTry));
 
                 bool ok =
                     rhoVTry > rhoMin &&

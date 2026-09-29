@@ -1,10 +1,19 @@
 using EngineeringFluids.Fluids;
 using EngineeringFluids.Helmholtz.Solvers;
+using EngineeringUnits.Fast;
 using System;
 using static EngineeringFluids.Helmholtz.Phase;
 
 public static partial class Update
 {
+    // Temperature search limits shared by the single-phase (P,H) and (P,S) flashes.
+    private static readonly Temperature FlashTmax = Temperature.FromKelvin(2500.0);
+    private static readonly Temperature FlashTripleMargin = Temperature.FromKelvin(1e-3);
+    private static readonly Temperature FlashDomeMargin = Temperature.FromKelvin(1e-4);
+    private static readonly Temperature FlashTwoPhaseNudge = Temperature.FromKelvin(1e-3);
+    private static readonly Temperature FlashBracketCollapse = Temperature.FromKelvin(1e-9);
+    private static readonly Temperature FlashBisectionWidth = Temperature.FromKelvin(1e-12);
+
     // Pressure + enthalpy flash. Unlike UpdatePT/UpdatePX, there is no
     // direct ancillary shortcut for (P,H): the result can be single-phase OR two-phase
     // depending on where hTarget falls, so this has to combine the cheap two-phase check from
@@ -43,37 +52,37 @@ public static partial class Update
     // low P/low q - not present in UpdatePX, which is given quality directly. The absolute
     // density error stays tiny even so; only points below ~1 MPa with quality very close to an
     // endpoint are affected. [benchmark-guided]
-    public static void UpdatePH(this Ammonia local, double pTarget, double hTarget)
+    public static void UpdatePH(this Ammonia local, Pressure pTarget, Enthalpy hTarget)
     {
-        if (!double.IsFinite(pTarget) || pTarget <= 0)
-            throw new ArgumentOutOfRangeException(nameof(pTarget), $"UpdatePH: pressure must be positive. P={pTarget} Pa.");
-        if (!double.IsFinite(hTarget))
+        if (!double.IsFinite(pTarget.Pascal) || pTarget <= Pressure.Zero)
+            throw new ArgumentOutOfRangeException(nameof(pTarget), $"UpdatePH: pressure must be positive. P={pTarget.Pascal} Pa.");
+        if (!hTarget.HasValue())
             throw new ArgumentOutOfRangeException(nameof(hTarget), "UpdatePH: enthalpy must be finite.");
 
         local.ClearTwoPhase();
 
-        double Pc = local.Critical.Pressure;
-        double Tc = local.Critical.Temperature;
-        double Ttriple = local.TripleLiquid.Temperature;
-        double M = local.MolarMass;
-        double rhoRed = local.Critical.MolarDensity;
+        Pressure Pc = local.Critical.Pressure;
+        Temperature Tc = local.Critical.Temperature;
+        Temperature Ttriple = local.TripleLiquid.Temperature;
+        MolarMass M = local.MolarMass;
 
-        double Tmin = Ttriple + 1e-3;
-        const double Tmax = 2500.0;
+        Temperature Tmin = Ttriple + FlashTripleMargin;
+        Temperature Tmax = FlashTmax;
 
         bool subcritical = pTarget < Pc;
-        double Tsat = double.NaN, hL = double.NaN, hV = double.NaN;
-        double rhoLGuess = double.NaN, rhoVGuess = double.NaN;
+        Temperature Tsat = Temperature.FromKelvin(double.NaN);
+        Enthalpy hL = Enthalpy.FromJoulePerKilogram(double.NaN), hV = Enthalpy.FromJoulePerKilogram(double.NaN);
+        Molarity rhoLGuess, rhoVGuess;
         bool sawDome = false;
 
         if (subcritical)
         {
-            Tsat = SaturationTemperature.Temperature((float)pTarget);
+            Tsat = SaturationTemperature.Temperature(pTarget);
 
-            if (Tc - Tsat >= 1.0)
+            if (Tc - Tsat >= CriticalMargin)
             {
-                rhoLGuess = BubbleDensity.Density((float)Tsat);
-                rhoVGuess = DewDensity.Density((float)Tsat);
+                rhoLGuess = BubbleDensity.Density(Tsat);
+                rhoVGuess = DewDensity.Density(Tsat);
 
                 // hL/hV must come from the SAME source SetTwoPhase's own SatLiquidState/
                 // SatVaporState will use afterward (the full EOS evaluated at Tsat/rhoL/rhoV),
@@ -86,18 +95,18 @@ public static partial class Update
                 // the final state will be reported keeps this self-consistent. [benchmark-guided]
                 hL = new Ammonia { Temperature = Tsat, Density = rhoLGuess * M }.Enthalpy;
                 hV = new Ammonia { Temperature = Tsat, Density = rhoVGuess * M }.Enthalpy;
-                double dh = hV - hL;
+                Enthalpy dh = hV - hL;
 
-                if (dh > 1e-3)
+                if (dh > Enthalpy.FromJoulePerKilogram(1e-3))
                 {
                     sawDome = true;
 
                     // Small buffer so a target right at the endpoint isn't missed due to tiny
                     // model differences between the ancillary fit and the EOS itself.
-                    double epsH = Math.Max(50.0, 1e-6 * Math.Abs(dh));
+                    Enthalpy epsH = Enthalpy.Max(Enthalpy.FromJoulePerKilogram(50.0), 1e-6 * dh.Abs());
                     if (hTarget >= hL - epsH && hTarget <= hV + epsH)
                     {
-                        double q = Math.Clamp((hTarget - hL) / dh, 0.0, 1.0);
+                        double q = Math.Clamp((double)((hTarget - hL) / dh), 0.0, 1.0);
                         var sat = new SaturationSolver.SatResult(Tsat, pTarget, rhoLGuess, rhoVGuess);
                         local.SetTwoPhase(sat, q);
                         return;
@@ -111,18 +120,18 @@ public static partial class Update
         // ------------------------------------------------------------------
 
         Phases fixedPhase = Phases.Unknown;
-        double lo, hi;
+        Temperature lo, hi;
 
         if (sawDome && hTarget < hL)
         {
             fixedPhase = Phases.Liquid;
             lo = Tmin;
-            hi = Tsat - 1e-4;
+            hi = Tsat - FlashDomeMargin;
         }
         else if (sawDome) // hTarget > hV (the [hL,hV]+margin case already returned above)
         {
             fixedPhase = Phases.Gas;
-            lo = Tsat + 1e-4;
+            lo = Tsat + FlashDomeMargin;
             hi = Tmax;
         }
         else
@@ -150,10 +159,10 @@ public static partial class Update
         // 1.05x critical density there). Rather than chase a threshold, this tries the warm
         // start and falls back to the always-reliable ancillary guess if it fails - the same
         // safeguarded-fallback shape as the density Newton solve itself.]
-        double rhoGuessMolar = 0.0;
+        Molarity rhoGuessMolar = Molarity.Zero;
         bool haveGuess = false;
 
-        double EvalWarm(double TK)
+        Enthalpy EvalWarm(Temperature TK)
         {
             Phases p = fixedPhase;
             if (p == Phases.Unknown)
@@ -163,12 +172,12 @@ public static partial class Update
                 {
                     // Only reachable in the near-critical-skip case, landing in the razor-thin
                     // two-phase ambiguity band UpdatePT itself would also reject - nudge away.
-                    TK += 1e-3;
+                    TK += FlashTwoPhaseNudge;
                     p = DeterminePhaseCheapPure(local, TK, pTarget);
                 }
             }
 
-            double rhomolar;
+            Molarity rhomolar;
             if (haveGuess)
             {
                 try
@@ -192,13 +201,13 @@ public static partial class Update
             return local.Enthalpy;
         }
 
-        double flo = EvalWarm(lo) - hTarget;
-        double fhi = EvalWarm(hi) - hTarget;
+        Enthalpy flo = EvalWarm(lo) - hTarget;
+        Enthalpy fhi = EvalWarm(hi) - hTarget;
 
-        if (Math.Sign(flo) == Math.Sign(fhi))
+        if (Math.Sign(flo.SI) == Math.Sign(fhi.SI))
             throw new InvalidOperationException(
-                $"UpdatePH: could not bracket a single-phase solution in [{lo:G6} K, {hi:G6} K]. " +
-                $"P={pTarget} Pa, h={hTarget} J/kg is likely outside the supported range.");
+                $"UpdatePH: could not bracket a single-phase solution in [{lo.Kelvin:G6} K, {hi.Kelvin:G6} K]. " +
+                $"P={pTarget.Pascal} Pa, h={hTarget.JoulePerKilogram} J/kg is likely outside the supported range.");
 
         // Illinois (regula falsi variant): robust - the bracket is never lost - and converges
         // superlinearly for a smooth, monotonic function like enthalpy vs. temperature at
@@ -215,22 +224,25 @@ public static partial class Update
         // independently correct; only the OUTER root-find had stopped too early.]
         const int maxIts = 80;
         const double tolRel = 1e-9;
+        Enthalpy hScale = Enthalpy.Max(hTarget.Abs(), Enthalpy.FromJoulePerKilogram(1.0));
         int side = 0;
-        double a = lo, b = hi, fa = flo, fb = fhi;
-        double lastC = double.NaN, lastFc = double.NaN;
+        Temperature a = lo, b = hi;
+        Enthalpy fa = flo, fb = fhi;
+        Temperature lastC = Temperature.FromKelvin(double.NaN);
+        Enthalpy lastFc = Enthalpy.FromJoulePerKilogram(double.NaN);
 
         for (int i = 0; i < maxIts; i++)
         {
-            double c = (fa * b - fb * a) / (fa - fb);
-            c = Math.Clamp(c, Math.Min(a, b), Math.Max(a, b));
-            double fc = EvalWarm(c) - hTarget; // side effect: local is now at T=c
+            Temperature c = (fa * b - fb * a) / (fa - fb);
+            c = c.Clamp(Temperature.Min(a, b), Temperature.Max(a, b));
+            Enthalpy fc = EvalWarm(c) - hTarget; // side effect: local is now at T=c
             lastC = c;
             lastFc = fc;
 
-            if (Math.Abs(fc) <= tolRel * Math.Max(Math.Abs(hTarget), 1.0))
+            if (fc.Abs() <= tolRel * hScale)
                 return;
 
-            if (Math.Sign(fc) == Math.Sign(fb))
+            if (Math.Sign(fc.SI) == Math.Sign(fb.SI))
             {
                 b = c; fb = fc;
                 if (side == -1) fa *= 0.5;
@@ -250,7 +262,7 @@ public static partial class Update
             // (slower per step, but its "small interval => converged" reasoning is actually
             // valid, and it always finds the true root of a correctly-bracketed monotonic
             // function).
-            if (Math.Abs(b - a) < 1e-9)
+            if ((b - a).Abs() < FlashBracketCollapse)
             {
                 SolveBySafeBisection(lo, hi, flo, fhi);
                 return;
@@ -259,30 +271,30 @@ public static partial class Update
 
         // Illinois normally converges in well under maxIts for a smooth monotonic function;
         // if it didn't, fall back to safe bisection rather than accept an unconverged result.
-        if (Math.Abs(lastFc) > 1e-6 * Math.Max(Math.Abs(hTarget), 1.0))
+        if (lastFc.Abs() > 1e-6 * hScale)
         {
             SolveBySafeBisection(lo, hi, flo, fhi);
             return;
         }
 
-        void SolveBySafeBisection(double bA, double bB, double fA, double fB)
+        void SolveBySafeBisection(Temperature bA, Temperature bB, Enthalpy fA, Enthalpy fB)
         {
             for (int i = 0; i < 200; i++)
             {
-                double m = 0.5 * (bA + bB);
-                double fm = EvalWarm(m) - hTarget;
+                Temperature m = 0.5 * (bA + bB);
+                Enthalpy fm = EvalWarm(m) - hTarget;
 
-                if (Math.Abs(fm) <= tolRel * Math.Max(Math.Abs(hTarget), 1.0) || Math.Abs(bB - bA) < 1e-12)
+                if (fm.Abs() <= tolRel * hScale || (bB - bA).Abs() < FlashBisectionWidth)
                     return;
 
-                if (Math.Sign(fm) == Math.Sign(fA))
+                if (Math.Sign(fm.SI) == Math.Sign(fA.SI))
                 { bA = m; fA = fm; }
                 else
                 { bB = m; fB = fm; }
             }
 
             throw new InvalidOperationException(
-                $"UpdatePH: single-phase root-find did not converge. P={pTarget} Pa, h={hTarget} J/kg.");
+                $"UpdatePH: single-phase root-find did not converge. P={pTarget.Pascal} Pa, h={hTarget.JoulePerKilogram} J/kg.");
         }
     }
 }

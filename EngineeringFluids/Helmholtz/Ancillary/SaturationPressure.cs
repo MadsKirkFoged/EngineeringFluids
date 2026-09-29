@@ -1,4 +1,5 @@
-﻿using System;
+﻿using EngineeringUnits.Fast;
+using System;
 using System.Runtime.CompilerServices;
 
 /// <summary>
@@ -33,10 +34,16 @@ public static class SaturationPressure
     private const int NSeg_Hi = 6;
 
     /// <summary>
-    /// Returns pressure (Pa) for a given temperature (°C).
+    /// Returns the saturation pressure for a given temperature.
+    /// </summary>
+    public static EngineeringUnits.Fast.Pressure Pressure(Temperature t)
+        => EngineeringUnits.Fast.Pressure.FromPascal(Pressure((float)t.Kelvin));
+
+    /// <summary>
+    /// Returns pressure (Pa) for a given temperature (K).
     /// </summary>
     //[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static float Pressure(float t)
+    internal static float Pressure(float t)
     {
         // Clamp to domain
         if (t < Tmin)

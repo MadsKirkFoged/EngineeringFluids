@@ -1,4 +1,5 @@
-﻿using System;
+﻿using EngineeringUnits.Fast;
+using System;
 using System.Runtime.CompilerServices;
 
 /// <summary>
@@ -35,10 +36,16 @@ public static class BubbleDensity
     private const int NSeg_Hi = 256;
 
     /// <summary>
-    /// Returns Density for a given temperature (°C).
+    /// Returns the molar density for a given temperature.
+    /// </summary>
+    public static Molarity Density(Temperature t)
+        => Molarity.FromMolesPerCubicMeter(Density((float)t.Kelvin));
+
+    /// <summary>
+    /// Returns molar density (mol/m3) for a given temperature (K).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static float Density(float t)
+    internal static float Density(float t)
     {
         // Clamp to domain
         if (t < Tmin)

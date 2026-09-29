@@ -1,4 +1,5 @@
 using EngineeringFluids.Fluids;
+using EngineeringUnits.Fast;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 
@@ -8,7 +9,7 @@ namespace TestProject;
 public class DerivativeTests
 {
     private static readonly Ammonia Ref = new();
-    private static readonly double RhoCritMass = Ref.Critical.MolarDensity * Ref.MolarMass; // kg/m3
+    private static readonly Density RhoCritMass = Ref.Critical.MolarDensity * Ref.MolarMass;
 
     private static double AdaptiveEps(double delta)
     {
@@ -19,7 +20,7 @@ public class DerivativeTests
     }
 
     private static Ammonia StateAt(double T, double delta)
-        => new Ammonia { Temperature = T, Density = RhoCritMass * delta };
+        => new Ammonia { Temperature = Temperature.FromKelvin(T), Density = RhoCritMass * delta };
 
     private static void AssertDDelta2MatchesFiniteDifference(double T, double delta, string label)
     {
@@ -36,7 +37,7 @@ public class DerivativeTests
     public void AlphaR_dDelta2_MatchesFiniteDifference_VaporLikePoint()
     {
         // T = 400 K, rho_mass = 9 kg/m3 => delta ~ 0.0386
-        AssertDDelta2MatchesFiniteDifference(400.0, 9.0 / RhoCritMass, "Vapor-like point");
+        AssertDDelta2MatchesFiniteDifference(400.0, 9.0 / RhoCritMass.KilogramPerCubicMeter, "Vapor-like point");
     }
 
     [TestMethod]

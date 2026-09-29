@@ -1,5 +1,5 @@
 using EngineeringFluids.Fluids;
-using EngineeringUnits;
+using EngineeringUnits.Fast;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SharpFluids;
 using System;
@@ -32,7 +32,7 @@ public class CoolPropOracle_UpdatePX_Tests
 
     private static (double rho, double h, double s, double u, double T) OracleMix(double PPa, double q)
     {
-        var P = Pressure.FromPascal(PPa);
+        var P = EngineeringUnits.Pressure.FromPascal(PPa);
 
         var L = new Fluid(FluidList.Ammonia);
         L.UpdatePX(P, 0.0);
@@ -88,37 +88,37 @@ public class CoolPropOracle_UpdatePX_Tests
         const double absTolT_K = 1e-2;
         const double absTolP_Pa = 1e-3; // Psat is forced to exactly pTarget, so this should be ~0
 
-        double PPa = Pressure.FromBar(pBar).Pascal;
+        double PPa = EngineeringUnits.Pressure.FromBar(pBar).Pascal;
         var (rhoRef, hRef, sRef, uRef, TsatRef) = OracleMix(PPa, q);
 
         var a = new Ammonia();
-        a.UpdatePX(PPa, q);
+        a.UpdatePX(Pressure.FromPascal(PPa), q);
 
         Assert.AreEqual(EngineeringFluids.Helmholtz.Phase.Phases.Twophase, a.Phase, "Phase should be Twophase after UpdatePX");
         Assert.AreEqual(q, a.Quality, 1e-12, "Quality should be set exactly (no solving involved)");
 
-        Assert.IsTrue(RelErr(rhoRef, a.Density) <= relTol, $"rho mismatch at P={PPa} Pa, q={q}: expected={rhoRef}, actual={a.Density}");
-        Assert.IsTrue(RelErr(hRef, a.Enthalpy) <= relTol, $"h mismatch at P={PPa} Pa, q={q}: expected={hRef}, actual={a.Enthalpy}");
-        Assert.IsTrue(RelErr(sRef, a.Entropy) <= relTol, $"s mismatch at P={PPa} Pa, q={q}: expected={sRef}, actual={a.Entropy}");
-        Assert.IsTrue(RelErr(uRef, a.InternalEnergy) <= relTol, $"u mismatch at P={PPa} Pa, q={q}: expected={uRef}, actual={a.InternalEnergy}");
+        Assert.IsTrue(RelErr(rhoRef, a.Density.KilogramPerCubicMeter) <= relTol, $"rho mismatch at P={PPa} Pa, q={q}: expected={rhoRef}, actual={a.Density.KilogramPerCubicMeter}");
+        Assert.IsTrue(RelErr(hRef, a.Enthalpy.JoulePerKilogram) <= relTol, $"h mismatch at P={PPa} Pa, q={q}: expected={hRef}, actual={a.Enthalpy.JoulePerKilogram}");
+        Assert.IsTrue(RelErr(sRef, a.Entropy.JoulePerKilogramKelvin) <= relTol, $"s mismatch at P={PPa} Pa, q={q}: expected={sRef}, actual={a.Entropy.JoulePerKilogramKelvin}");
+        Assert.IsTrue(RelErr(uRef, a.InternalEnergy.JoulePerKilogram) <= relTol, $"u mismatch at P={PPa} Pa, q={q}: expected={uRef}, actual={a.InternalEnergy.JoulePerKilogram}");
 
-        Assert.IsTrue(Math.Abs(a.Temperature - TsatRef) <= absTolT_K, $"T mismatch at P={PPa} Pa, q={q}: expected={TsatRef}, actual={a.Temperature}");
-        Assert.IsTrue(Math.Abs(a.Pressure - PPa) <= absTolP_Pa, $"p back-calc mismatch at P={PPa} Pa, q={q}: expected={PPa}, actual={a.Pressure}");
+        Assert.IsTrue(Math.Abs(a.Temperature.Kelvin - TsatRef) <= absTolT_K, $"T mismatch at P={PPa} Pa, q={q}: expected={TsatRef}, actual={a.Temperature.Kelvin}");
+        Assert.IsTrue(Math.Abs(a.Pressure.Pascal - PPa) <= absTolP_Pa, $"p back-calc mismatch at P={PPa} Pa, q={q}: expected={PPa}, actual={a.Pressure.Pascal}");
     }
 
     [TestMethod]
     public void UpdatePX_Throws_AtOrAboveCriticalPressure()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pc, 0.5));
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pc * 1.1, 0.5));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pressure.FromPascal(Pc), 0.5));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pressure.FromPascal(Pc * 1.1), 0.5));
     }
 
     [TestMethod]
     public void UpdatePX_Throws_BelowTriplePressure()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePX(Ptriple * 0.5, 0.5));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePX(Pressure.FromPascal(Ptriple * 0.5), 0.5));
     }
 
     [TestMethod]
@@ -128,7 +128,7 @@ public class CoolPropOracle_UpdatePX_Tests
         // (see UpdatePX.cs remarks and the sweep test below) - UpdatePX rejects it
         // outright instead of silently returning an inaccurate state.
         var a = new Ammonia();
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pc * 0.995, 0.5));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pressure.FromPascal(Pc * 0.995), 0.5));
     }
 
     [DataTestMethod]
@@ -138,7 +138,7 @@ public class CoolPropOracle_UpdatePX_Tests
     public void UpdatePX_Throws_ForInvalidQuality(double q)
     {
         var a = new Ammonia();
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePX(1_000_000.0, q));
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => a.UpdatePX(Pressure.FromPascal(1_000_000.0), q));
     }
 
     // Non-throwing oracle lookup for the tight sweep loop below - avoids Assert.Inconclusive's
@@ -151,7 +151,7 @@ public class CoolPropOracle_UpdatePX_Tests
     private static bool TryOracleMix(double PPa, double q, out double rho, out double h, out double s, out double u, out double T)
     {
         rho = h = s = u = T = double.NaN;
-        var P = Pressure.FromPascal(PPa);
+        var P = EngineeringUnits.Pressure.FromPascal(PPa);
 
         var L = new Fluid(FluidList.Ammonia);
         L.UpdatePX(P, 0.0);
@@ -237,7 +237,7 @@ public class CoolPropOracle_UpdatePX_Tests
             var a = new Ammonia();
             try
             {
-                a.UpdatePX(PPa, q);
+                a.UpdatePX(Pressure.FromPascal(PPa), q);
             }
             catch (Exception)
             {
@@ -248,11 +248,11 @@ public class CoolPropOracle_UpdatePX_Tests
                 continue;
             }
 
-            double eRho = RelErr(rhoRef, a.Density);
-            double eH = RelErr(hRef, a.Enthalpy);
-            double eS = RelErr(sRef, a.Entropy);
-            double eU = RelErr(uRef, a.InternalEnergy);
-            double eT = Math.Abs(a.Temperature - TsatRef);
+            double eRho = RelErr(rhoRef, a.Density.KilogramPerCubicMeter);
+            double eH = RelErr(hRef, a.Enthalpy.JoulePerKilogram);
+            double eS = RelErr(sRef, a.Entropy.JoulePerKilogramKelvin);
+            double eU = RelErr(uRef, a.InternalEnergy.JoulePerKilogram);
+            double eT = Math.Abs(a.Temperature.Kelvin - TsatRef);
 
             bool ok = eRho <= relTol && eH <= relTol && eS <= relTol && eU <= relTol && eT <= absTolT_K;
 

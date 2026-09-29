@@ -1,5 +1,6 @@
 using EngineeringFluids.Helmholtz;
 using EngineeringFluids.Helmholtz.Solvers;
+using EngineeringUnits.Fast;
 using System;
 using static EngineeringFluids.Helmholtz.Phase;
 
@@ -10,41 +11,41 @@ public class Ammonia
     // ---------------------------
     // Primary state (single-phase)
     // ---------------------------
-    public double Temperature { get; set; }
-    public double Density { get; set; }
+    public Temperature Temperature { get; set; }
+    public Density Density { get; set; }
 
     // ---------------------------
     // Fixed reference points
     // ---------------------------
     public readonly SpecificPoint Critical = new SpecificPoint()
     {
-        Temperature = 405.56,
-        MolarEnthalpy = 21501.16668203028,
-        Pressure = 11363400,
-        MolarDensity = 13696,
-        MolarEntropy = 68.56438502935785
+        Temperature = Temperature.FromKelvin(405.56),
+        MolarEnthalpy = MolarEnergy.FromJoulePerMole(21501.16668203028),
+        Pressure = Pressure.FromPascal(11363400),
+        MolarDensity = Molarity.FromMolesPerCubicMeter(13696),
+        MolarEntropy = MolarEntropy.FromJoulePerMoleKelvin(68.56438502935785)
     };
 
     public readonly SpecificPoint TripleLiquid = new SpecificPoint()
     {
-        Temperature = 195.495,
-        MolarEnthalpy = 0.14111811220522047,
-        Pressure = 6091.2231081315085,
-        MolarDensity = 43035.33929207322,
-        MolarEntropy = -1.9440525067083775e-06
+        Temperature = Temperature.FromKelvin(195.495),
+        MolarEnthalpy = MolarEnergy.FromJoulePerMole(0.14111811220522047),
+        Pressure = Pressure.FromPascal(6091.2231081315085),
+        MolarDensity = Molarity.FromMolesPerCubicMeter(43035.33929207322),
+        MolarEntropy = MolarEntropy.FromJoulePerMoleKelvin(-1.9440525067083775e-06)
     };
 
     public readonly SpecificPoint TripleVapor = new SpecificPoint()
     {
-        Temperature = 195.495,
-        MolarEnthalpy = 25279.492873914965,
-        Pressure = 6091.223108650368,
-        MolarDensity = 3.763506027681136,
-        MolarEntropy = 129.30945229032756,
+        Temperature = Temperature.FromKelvin(195.495),
+        MolarEnthalpy = MolarEnergy.FromJoulePerMole(25279.492873914965),
+        Pressure = Pressure.FromPascal(6091.223108650368),
+        MolarDensity = Molarity.FromMolesPerCubicMeter(3.763506027681136),
+        MolarEntropy = MolarEntropy.FromJoulePerMoleKelvin(129.30945229032756),
     };
 
-    public readonly double MolarMass = 0.01703052;
-    public readonly double GasConstant = 8.3144598;
+    public readonly MolarMass MolarMass = MolarMass.FromKilogramPerMole(0.01703052);
+    public readonly MolarEntropy GasConstant = MolarEntropy.FromJoulePerMoleKelvin(8.3144598);
 
     // ---------------------------
     // Two-phase mode storage
@@ -67,10 +68,10 @@ public class Ammonia
 
         // Reporting-only mixture density via lever rule on specific volume (mass basis).
         // This density must NOT be used to evaluate single-phase EOS properties.
-        double rhoL_mass = sat.RhomolarL * MolarMass; // kg/m3
-        double rhoV_mass = sat.RhomolarV * MolarMass; // kg/m3
+        Density rhoL_mass = sat.RhomolarL * MolarMass;
+        Density rhoV_mass = sat.RhomolarV * MolarMass;
 
-        double vMix = (1.0 - q) / rhoL_mass + q / rhoV_mass;
+        SpecificVolume vMix = (1.0 - q) / rhoL_mass + q / rhoV_mass;
         Density = 1.0 / vMix;
     }
 
@@ -106,9 +107,9 @@ public class Ammonia
     // ---------------------------
     // Reduced variables
     // ---------------------------
-    public double Tau => Critical.Temperature / Temperature;
+    public double Tau => (double)(Critical.Temperature / Temperature);
 
-    public double Delta => Density / (Critical.MolarDensity * MolarMass);
+    public double Delta => (double)(Density / (Critical.MolarDensity * MolarMass));
 
     // ---------------------------
     // Helmholtz energy terms
@@ -125,12 +126,12 @@ public class Ammonia
     // ---------------------------
     // Density helpers (molar)
     // ---------------------------
-    public double Rhomolar => Density / MolarMass; // mol/m3
+    public Molarity Rhomolar => Density / MolarMass;
 
-    public double MolarDensity => Density / MolarMass; // mol/m3
+    public Molarity MolarDensity => Density / MolarMass;
 
-    // dp/drhomolar at constant T (SI: Pa / (mol/m3))
-    public double dp_drhomolar_constT_SI
+    // dp/drhomolar at constant T: Pa / (mol/m3) = J/mol
+    public MolarEnergy dp_drhomolar_constT
     {
         get
         {
@@ -143,7 +144,7 @@ public class Ammonia
     // ---------------------------
     // Pressure (single-phase EOS or two-phase saturation)
     // ---------------------------
-    public double Pressure
+    public Pressure Pressure
     {
         get
         {
@@ -161,9 +162,9 @@ public class Ammonia
     // ---------------------------
     // Thermodynamic properties
     // ---------------------------
-    public double MolarEntropy => GasConstant * (Tau * (Alpha0_dTau + AlphaR_dTau) - Alpha0 - AlphaR);
+    public MolarEntropy MolarEntropy => GasConstant * (Tau * (Alpha0_dTau + AlphaR_dTau) - Alpha0 - AlphaR);
 
-    public double Entropy
+    public SpecificEntropy Entropy
     {
         get
         {
@@ -178,9 +179,9 @@ public class Ammonia
         }
     }
 
-    public double MolarInternalEnergy => GasConstant * Temperature * Tau * (Alpha0_dTau + AlphaR_dTau);
+    public MolarEnergy MolarInternalEnergy => GasConstant * Temperature * Tau * (Alpha0_dTau + AlphaR_dTau);
 
-    public double InternalEnergy
+    public SpecificEnergy InternalEnergy
     {
         get
         {
@@ -195,10 +196,9 @@ public class Ammonia
         }
     }
 
-    // Molar enthalpy (J/mol)
-    public double HMolarEnthalpy => GasConstant * Temperature * (1 + Tau * (Alpha0_dTau + AlphaR_dTau) + Delta * AlphaR_dDelta);
+    public MolarEnergy HMolarEnthalpy => GasConstant * Temperature * (1 + Tau * (Alpha0_dTau + AlphaR_dTau) + Delta * AlphaR_dDelta);
 
-    public double Enthalpy
+    public Enthalpy Enthalpy
     {
         get
         {
@@ -220,7 +220,7 @@ public class Ammonia
 
     public double FugacityCoefficient => Math.Exp(LNFugacityCoefficient);
 
-    public double Fugacity => FugacityCoefficient * Pressure;
+    public Pressure Fugacity => FugacityCoefficient * Pressure;
 
     // d(ln(phi))/d(delta)
     public double dLnPhi_dDelta
@@ -235,15 +235,16 @@ public class Ammonia
         }
     }
 
-    // d(ln(phi))/d(rhomolar) at const T
-    public double dLnPhi_dRhomolar_constT_SI => dLnPhi_dDelta / Critical.MolarDensity;
+    // d(ln(phi))/d(rhomolar) at const T: m3/mol (no named quantity, so the dimension is declared)
+    [UnitDimension(BaseunitType.length, 3, BaseunitType.amountOfSubstance, -1)]
+    public UnknownUnit dLnPhi_dRhomolar_constT => dLnPhi_dDelta / Critical.MolarDensity;
 
     // ---------------------------
     // Misc thermodynamic helpers (single-phase)
     // ---------------------------
     public double CompressibilityFactor => 1 + Delta * AlphaR_dDelta;
 
-    public double Gibbsmolar => GasConstant * Temperature * (1 + Alpha0 + AlphaR + Delta * AlphaR_dDelta);
+    public MolarEnergy Gibbsmolar => GasConstant * Temperature * (1 + Alpha0 + AlphaR + Delta * AlphaR_dDelta);
 
     // ---------------------------
     // Phase + Quality
@@ -258,8 +259,8 @@ public class Ammonia
             // Simple classification based on saturation pressure for subcritical
             if (Temperature < Critical.Temperature)
             {
-                double psat = SaturationPressure.Pressure((float)Temperature);
-                double p = Pressure;
+                Pressure psat = SaturationPressure.Pressure(Temperature);
+                Pressure p = Pressure;
 
                 if (p > psat)
                     return Phases.Liquid;

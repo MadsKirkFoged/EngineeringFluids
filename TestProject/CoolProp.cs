@@ -1,6 +1,6 @@
 ﻿using EngineeringFluids.Fluids;
 using EngineeringFluids.Helmholtz.Solvers;
-using EngineeringUnits;
+using EngineeringUnits.Fast;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SharpFluids;
 using System;
@@ -11,7 +11,7 @@ namespace TestProject;
 [TestClass]
 public class CoolPropOracle_UpdatePT_Tests
 {
-    private static void AssertRel(double expected, double actual, double relTol, string name, Pressure P, Temperature T, string region)
+    private static void AssertRel(double expected, double actual, double relTol, string name, EngineeringUnits.Pressure P, EngineeringUnits.Temperature T, string region)
     {
         double denom = Math.Max(Math.Abs(expected), 1.0);
         double rel = Math.Abs(actual - expected) / denom;
@@ -52,15 +52,15 @@ public class CoolPropOracle_UpdatePT_Tests
     [DynamicData(nameof(SinglePhasePoints_Primitive), DynamicDataSourceType.Method)]
     public void UpdatePT_Matches_SharpFluids(double pBar, string mode, double value)
     {
-        Pressure P = Pressure.FromBar(pBar);
+        EngineeringUnits.Pressure P = EngineeringUnits.Pressure.FromBar(pBar);
 
-        Temperature T;
+        EngineeringUnits.Temperature T;
         string regionLabel;
 
         // --- Determine temperature ---
         if (mode == "abs")
         {
-            T = Temperature.FromKelvin(value);
+            T = EngineeringUnits.Temperature.FromKelvin(value);
             regionLabel = "supercritical";
         }
         else
@@ -76,12 +76,12 @@ public class CoolPropOracle_UpdatePT_Tests
 
             if (mode == "vapor")
             {
-                T = Temperature.FromKelvin(Tsat!.Kelvin + dT);
+                T = EngineeringUnits.Temperature.FromKelvin(Tsat!.Kelvin + dT);
                 regionLabel = "vapor";
             }
             else if (mode == "liquid")
             {
-                T = Temperature.FromKelvin(Tsat!.Kelvin - dT);
+                T = EngineeringUnits.Temperature.FromKelvin(Tsat!.Kelvin - dT);
                 regionLabel = "liquid";
             }
             else
@@ -125,7 +125,7 @@ public class CoolPropOracle_UpdatePT_Tests
 
         try
         {
-            a.UpdatePT(P.SI, T.SI);
+            a.UpdatePT(Pressure.FromSI(P.SI), Temperature.FromSI(T.SI));
         }
         catch (Exception ex)
         {
@@ -133,11 +133,11 @@ public class CoolPropOracle_UpdatePT_Tests
             return;
         }
 
-        double rho = a.Density;
-        double h = a.Enthalpy;
-        double s = a.Entropy;
-        double u = a.InternalEnergy;
-        double p = a.Pressure;
+        double rho = a.Density.KilogramPerCubicMeter;
+        double h = a.Enthalpy.JoulePerKilogram;
+        double s = a.Entropy.JoulePerKilogramKelvin;
+        double u = a.InternalEnergy.JoulePerKilogram;
+        double p = a.Pressure.Pascal;
 
         // --- Assertions ---
         // Start a bit looser, tighten once stable
@@ -198,7 +198,7 @@ public class CoolPropOracle_UpdatePT_Tests
             return Math.Abs(actual - expected) / denom;
         }
 
-        void Record(string region, Pressure P, Temperature T,
+        void Record(string region, EngineeringUnits.Pressure P, EngineeringUnits.Temperature T,
             double rho_ref, double rho, double e_rho,
             double h_ref, double h, double e_h,
             double s_ref, double s, double e_s,
@@ -237,7 +237,7 @@ public class CoolPropOracle_UpdatePT_Tests
         }
 
         // ---- Helper to run and compare one point ----
-        void ComparePoint(string region, Pressure P, Temperature T)
+        void ComparePoint(string region, EngineeringUnits.Pressure P, EngineeringUnits.Temperature T)
         {
             total++;
 
@@ -283,7 +283,7 @@ public class CoolPropOracle_UpdatePT_Tests
             var a = new Ammonia();
             try
             {
-                a.UpdatePT(P.SI, T.SI);
+                a.UpdatePT(Pressure.FromSI(P.SI), Temperature.FromSI(T.SI));
             }
             catch (Exception ex)
             {
@@ -297,11 +297,11 @@ public class CoolPropOracle_UpdatePT_Tests
                 return;
             }
 
-            double rho = a.Density!;
-            double h = a.Enthalpy;
-            double s = a.Entropy;
-            double u = a.InternalEnergy;
-            double p = a.Pressure;
+            double rho = a.Density.KilogramPerCubicMeter;
+            double h = a.Enthalpy.JoulePerKilogram;
+            double s = a.Entropy.JoulePerKilogramKelvin;
+            double u = a.InternalEnergy.JoulePerKilogram;
+            double p = a.Pressure.Pascal;
 
             // Errors
             double e_rho = RelErr(rho_ref, rho);
@@ -340,7 +340,7 @@ public class CoolPropOracle_UpdatePT_Tests
         // ---- Subcritical sweep using Tsat(P) ----
         foreach (double pBar in pressuresBar)
         {
-            var P = Pressure.FromBar(pBar);
+            var P = EngineeringUnits.Pressure.FromBar(pBar);
 
             // Tsat(P) from SharpFluids oracle (CoolProp) [4](https://colab.research.google.com/github/JMQuinlan/Thermo/blob/main/Thermo_Calc_Example.ipynb)[5](https://coolprop.org/_static/doxygen/html/class_cool_prop_1_1_j_s_o_n_fluid_library.html)
             var satFluid = new Fluid(FluidList.Ammonia);
@@ -354,8 +354,8 @@ public class CoolPropOracle_UpdatePT_Tests
 
             foreach (double dT in dTs)
             {
-                var Tliq = Temperature.FromKelvin(Tsat.Kelvin - dT);
-                var Tvap = Temperature.FromKelvin(Tsat.Kelvin + dT);
+                var Tliq = EngineeringUnits.Temperature.FromKelvin(Tsat.Kelvin - dT);
+                var Tvap = EngineeringUnits.Temperature.FromKelvin(Tsat.Kelvin + dT);
 
                 // Avoid too close to triple
                 if (Tliq.Kelvin >= 200.0)
@@ -368,10 +368,10 @@ public class CoolPropOracle_UpdatePT_Tests
         // ---- Supercritical sweep ----
         foreach (double pBar in supercriticalPressuresBar)
         {
-            var P = Pressure.FromBar(pBar);
+            var P = EngineeringUnits.Pressure.FromBar(pBar);
             foreach (double T_K in supercriticalTempsK)
             {
-                ComparePoint("supercritical", P, Temperature.FromKelvin(T_K));
+                ComparePoint("supercritical", P, EngineeringUnits.Temperature.FromKelvin(T_K));
             }
         }
 
@@ -638,12 +638,12 @@ public class CoolPropOracle_UpdatePT_Tests
             double rho, h, s, u, pCalc;
             try
             {
-                a.UpdatePT(PPa, TK);
-                rho = a.Density;
-                h = a.Enthalpy;
-                s = a.Entropy;
-                u = a.InternalEnergy;
-                pCalc = a.Pressure;
+                a.UpdatePT(Pressure.FromPascal(PPa), Temperature.FromKelvin(TK));
+                rho = a.Density.KilogramPerCubicMeter;
+                h = a.Enthalpy.JoulePerKilogram;
+                s = a.Entropy.JoulePerKilogramKelvin;
+                u = a.InternalEnergy.JoulePerKilogram;
+                pCalc = a.Pressure.Pascal;
             }
             catch (Exception ex)
             {
