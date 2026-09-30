@@ -64,10 +64,10 @@ public static class IdealHelmholtzPlanckEinstein
     }
 
     /// <summary>
-    /// Stable log(1 - exp(x)) for x <= 0.
+    /// Stable log(1 - exp(x)) for x &lt;= 0.
     /// Standard split:
-    ///   if x < -ln2  => log1p(-exp(x))
-    ///   else         => log(-expm1(x))
+    ///   if x &lt; -ln2  =&gt; log1p(-exp(x))
+    ///   else         =&gt; log(-expm1(x))
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static double Log1mExp(double x)

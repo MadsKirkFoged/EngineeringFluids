@@ -4,6 +4,30 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <!-- NuGet package. The version is set by the release workflow from the git tag (v1.2.3 -> 1.2.3). -->
+  <PropertyGroup>
+    <PackageId>EngineeringFluids</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Mads Kirk Foged</Authors>
+    <Description>Fast, unit-typed thermodynamic and transport properties for engineering fluids (Ammonia/R717), matching CoolProp. Built on EngineeringUnits.Fast.</Description>
+    <PackageTags>thermodynamics;fluids;refrigerants;ammonia;R717;coolprop;engineering;units</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/MadsKirkFoged/EngineeringFluids</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/MadsKirkFoged/EngineeringFluids</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="EngineeringUnits.Fast" Version="2.2.149" />
     <PackageReference Include="Kolbe.LitMath" Version="0.7.0" />

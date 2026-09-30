@@ -21,12 +21,12 @@ public static class Phase
         Supercritical,
 
         /// <summary>
-        /// Supercritical gas (p<pc, T>Tc)
+        /// Supercritical gas (p&lt;pc, T&gt;Tc)
         /// </summary>
         SupercriticalGas,
 
         /// <summary>
-        /// Supercritical liquid (p>pc, T<Tc)
+        /// Supercritical liquid (p&gt;pc, T&lt;Tc)
         /// </summary>
         SupercriticalLiquid,
 
