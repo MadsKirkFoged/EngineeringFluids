@@ -38,7 +38,7 @@ public static class AmmoniaThermalConductivity
     private static double Critical(double T, double rho)
     {
         const double Tc = 405.4, rhoc = 235;
-        const double LAMBDA = 1.2, nu = 0.63, gamma = 1.24, DELTA = 0.50, zeta_0_plus = 1.34e-10, a_zeta = 1, GAMMA_0_plus = 0.423e-8;
+        const double LAMBDA = 1.2, nu = 0.63, gamma = 1.24, zeta_0_plus = 1.34e-10, a_zeta = 1, GAMMA_0_plus = 0.423e-8; // DELTA = 0.5, see below
         const double pi = 3.141592654, k_B = 1.3806504e-23;
 
         double t = Math.Abs((T - Tc) / Tc);
@@ -48,8 +48,10 @@ public static class AmmoniaThermalConductivity
         double X_T = 0.61 * rhoc + 16.5 * Math.Log(t);
 
         // Along the critical isochore (only a function of temperature) (Eq. 9)
-        double DELTA_lambda_i = LAMBDA * (k_B * T * T) / (6 * pi * eta_B * (zeta_0_plus * Math.Pow(t, -nu) * (1 + a_zeta * Math.Pow(t, DELTA))))
-                                * dPdT * dPdT * GAMMA_0_plus * Math.Pow(t, -gamma) * (1 + a_chi * Math.Pow(t, DELTA));
+        // CoolProp's t^DELTA with DELTA = 0.5 is a square root, and its t^-gamma / t^-nu is one power t^(nu - gamma)
+        double tDelta = Math.Sqrt(t);
+        double DELTA_lambda_i = LAMBDA * (k_B * T * T) / (6 * pi * eta_B * (zeta_0_plus * (1 + a_zeta * tDelta)))
+                                * dPdT * dPdT * GAMMA_0_plus * Math.Pow(t, nu - gamma) * (1 + a_chi * tDelta);
         double DELTA_lambda_id = DELTA_lambda_i * Math.Exp(-36 * t * t);
 
         if (rho < 0.6 * rhoc)

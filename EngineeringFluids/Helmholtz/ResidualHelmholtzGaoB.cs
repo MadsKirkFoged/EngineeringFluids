@@ -33,11 +33,13 @@ public static class ResidualHelmholtzGaoB
     // alphaR/alphaR_dDelta/alphaR_dTau/alphaR_dDelta2 functions.
     //
     // term_i = n_i * delta * tau^t_i * exp(eta_i*(delta-eps_i)^2 + 1/(b_i + beta_i*(gamma_i-tau)^2))
-    public static ResidualDerivatives Derivatives(double delta, double tau)
+    public static ResidualDerivatives Derivatives(double delta, double tau) => Derivatives(delta, tau, Math.Log(tau));
+
+    // logTau = Math.Log(tau), shared by every Helmholtz term of one state
+    public static ResidualDerivatives Derivatives(double delta, double tau, double logTau)
     {
         // tau must be > 0 for Log
         double invTau = 1.0 / tau;
-        double logTau = Math.Log(tau);
 
         // ---------------------------
         // Delta side: expDelta = exp(eta * dd^2)
@@ -63,14 +65,9 @@ public static class ResidualHelmholtzGaoB
         double denom0 = Math.FusedMultiplyAdd(beta0, dt0Sq, b0);
         double denom1 = Math.FusedMultiplyAdd(beta1, dt1Sq, b1);
 
-        double expTau0 = Math.Exp(1.0 / denom0);
-        double expTau1 = Math.Exp(1.0 / denom1);
-
-        double tauPow0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 0.0));
-        double tauPow1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 0.0));
-
-        double Ftau0 = tauPow0 * expTau0;
-        double Ftau1 = tauPow1 * expTau1;
+        // tau^t * exp(1/denom) in one Exp each (as in TauCache)
+        double Ftau0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 1.0 / denom0));
+        double Ftau1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 1.0 / denom1));
 
         // ---- value = delta * [ (n0*Ftau0*expDelta0) + (n1*Ftau1*expDelta1) ] ----
         double a0 = (n0 * Ftau0);
@@ -153,6 +150,10 @@ public static class ResidualHelmholtzGaoB
     // Fused first+second delta-derivative for the density Newton solve, taking a precomputed
     // TauCache instead of recomputing the tau-side terms on every call (see TauCache remarks).
     public static void alphaR_dDelta_dDelta2(double delta, in TauCache c, out double dDelta, out double dDelta2)
+        => alphaR_dDelta_dDelta2(delta, in c, out _, out dDelta, out dDelta2);
+
+    // As above plus alphaR itself - everything a fixed-temperature solve needs (p, dp/drho, ln(phi), d ln(phi)/drho)
+    public static void alphaR_dDelta_dDelta2(double delta, in TauCache c, out double value, out double dDelta, out double dDelta2)
     {
         // term 0 delta side
         double dd0 = delta - eps0;
@@ -175,6 +176,7 @@ public static class ResidualHelmholtzGaoB
         double p1 = (n1 * c.Ftau1) * expDelta1;
 
         dDelta = Math.FusedMultiplyAdd(p0, mult0, p1 * mult1);
+        value = delta * (p0 + p1);
 
         // ---- second derivative (reuses expDelta0/1, dd0/1) ----
         double u10 = (2.0 * eta0) * dd0;

@@ -92,14 +92,18 @@ public class Ammonia
     public void SetTwoPhase(SaturationSolver.SatResult sat, double q) => SetTwoPhase(sat, q, Phases.Twophase);
 
     // phase: the label to report - Twophase, or CriticalPoint when a flash lands exactly on it (as CoolProp does)
-    internal void SetTwoPhase(SaturationSolver.SatResult sat, double q, Phases phase)
+    internal void SetTwoPhase(SaturationSolver.SatResult sat, double q, Phases phase) => SetTwoPhase(sat, q, phase, null, null);
+
+    // liquid/vapor: the saturated states at (sat.T, sat.RhomolarL/V) when the caller already built them (their
+    // cached EOS evaluation is then reused instead of being redone on the first two-phase property read)
+    internal void SetTwoPhase(SaturationSolver.SatResult sat, double q, Phases phase, Ammonia? liquid, Ammonia? vapor)
     {
         if (q < 0 || q > 1)
             throw new ArgumentOutOfRangeException(nameof(q), "Quality must be in [0,1].");
 
         _satCache = sat;
-        _satLiquid = null;
-        _satVapor = null;
+        _satLiquid = liquid;
+        _satVapor = vapor;
         _quality = q;
         _isTwoPhase = true;
 
@@ -203,13 +207,16 @@ public class Ammonia
         double tau = (double)(Critical.Temperature / Temperature);
         double delta = (double)(Density / (Critical.MolarDensity * MolarMass));
 
+        // ln(tau) once for every term (each used to take its own)
+        double lnTau = Math.Log(tau);
+
         IdealDerivatives lead = IdealGasHelmholtzLead.Derivatives(delta, tau);
-        IdealDerivatives logTau = IdealHelmholtzLogTau.Derivatives(delta, tau);
+        IdealDerivatives logTau = IdealHelmholtzLogTau.Derivatives(delta, tau, lnTau);
         IdealDerivatives planckEinstein = IdealHelmholtzPlanckEinstein.Derivatives(delta, tau);
 
-        ResidualDerivatives power = ResidualHelmholtzPower.Derivatives(delta, tau);
-        ResidualDerivatives gaussian = ResidualHelmholtzGaussian.Derivatives(delta, tau);
-        ResidualDerivatives gaoB = ResidualHelmholtzGaoB.Derivatives(delta, tau);
+        ResidualDerivatives power = ResidualHelmholtzPower.Derivatives(delta, tau, lnTau);
+        ResidualDerivatives gaussian = ResidualHelmholtzGaussian.Derivatives(delta, tau, lnTau);
+        ResidualDerivatives gaoB = ResidualHelmholtzGaoB.Derivatives(delta, tau, lnTau);
 
         var ideal = new IdealDerivatives(
             lead.Value + logTau.Value + planckEinstein.Value,

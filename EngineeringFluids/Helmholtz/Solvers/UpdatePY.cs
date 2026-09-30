@@ -138,6 +138,7 @@ public static partial class Update
         bool subcritical = pTarget < Pc;
         Temperature Tsat = Temperature.FromKelvin(double.NaN);
         double yL = double.NaN, yV = double.NaN;
+        Ammonia? satL = null, satV = null;
         bool sawDome = false;
 
         if (subcritical)
@@ -157,8 +158,10 @@ public static partial class Update
                 // near q~0: the reciprocal specific-volume mixing rule is very sensitive to a
                 // small quality error there (1/rhoV >> 1/rhoL). Evaluating yL/yV the same way
                 // the final state will be reported keeps this self-consistent. [benchmark-guided]
-                yL = Read(new Ammonia { Temperature = Tsat, Density = sat.RhomolarL * M }, y);
-                yV = Read(new Ammonia { Temperature = Tsat, Density = sat.RhomolarV * M }, y);
+                satL = new Ammonia { Temperature = Tsat, Density = sat.RhomolarL * M };
+                satV = new Ammonia { Temperature = Tsat, Density = sat.RhomolarV * M };
+                yL = Read(satL, y);
+                yV = Read(satV, y);
                 double dy = yV - yL;
 
                 if (dy > minDomeWidth)
@@ -171,7 +174,8 @@ public static partial class Update
                     if (yTarget >= yL - buffer && yTarget <= yV + buffer)
                     {
                         double q = Math.Clamp((yTarget - yL) / dy, 0.0, 1.0);
-                        local.SetTwoPhase(new SaturationSolver.SatResult(Tsat, pTarget, sat.RhomolarL, sat.RhomolarV), q);
+                        // the saturated states just evaluated are the ones the two-phase properties read
+                        local.SetTwoPhase(new SaturationSolver.SatResult(Tsat, pTarget, sat.RhomolarL, sat.RhomolarV), q, Phases.Twophase, satL, satV);
                         return;
                     }
                 }
@@ -269,6 +273,56 @@ public static partial class Update
             local.Temperature = TK;
             local.Density = rhomolar * M;
             return Read(local, y);
+        }
+
+        // Newton first, when the dome fixes the phase: dy/dT at fixed P is Cp for enthalpy and Cp/T for entropy,
+        // both from the EOS evaluation the property read just cached, and the saturated state's Cp gives a start a
+        // few kelvin from the root. The dome side of the bracket is known without evaluating it (y is monotonic in
+        // T and y(Tsat) is yL/yV), so steps are kept inside [lo, hi] and bisect when they would leave it. Any
+        // failure to converge falls through to the Illinois search below, which is unchanged.
+        if (sawDome && satL is not null && satV is not null)
+        {
+            try
+            {
+                if (TryNewtonT(fixedPhase == Phases.Gas ? satV : satL, fixedPhase == Phases.Gas ? yV : yL))
+                    return;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+            haveGuess = false;
+        }
+
+        bool TryNewtonT(Ammonia saturated, double ySat)
+        {
+            const double tolNewton = 1e-9; // same residual test as the Illinois search
+            double scale = Math.Max(Math.Abs(yTarget), 1.0);
+            double cpSat = saturated.Cp.JoulePerKilogramKelvin;
+            double dySat = yTarget - ySat;
+            Temperature T = y == FlashProperty.Enthalpy
+                ? Tsat + Temperature.FromKelvin(dySat / cpSat)
+                : Tsat * Math.Exp(dySat / cpSat);
+
+            Temperature a = lo, b = hi; // y(a) < yTarget < y(b)
+            if (!(T > a && T < b))
+                T = 0.5 * (a + b);
+
+            for (int i = 0; i < 25; i++)
+            {
+                double f = EvalWarm(T) - yTarget;
+                if (Math.Abs(f) <= tolNewton * scale)
+                    return true;
+
+                if (f < 0) a = T; else b = T;
+                if ((b - a).Abs() < FlashBracketCollapse)
+                    return false;
+
+                double cp = local.Cp.JoulePerKilogramKelvin;
+                double dydT = y == FlashProperty.Enthalpy ? cp : cp / T.Kelvin;
+                Temperature next = T - Temperature.FromKelvin(f / dydT);
+                T = next > a && next < b ? next : 0.5 * (a + b);
+            }
+            return false;
         }
 
         double flo = EvalWarm(lo) - yTarget;

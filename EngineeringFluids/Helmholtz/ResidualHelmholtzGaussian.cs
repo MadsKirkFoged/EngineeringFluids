@@ -77,39 +77,20 @@ public static class ResidualHelmholtzGaussian
         };
     }
 
-    // --------------------------
-    // Helper: tau^t via powless exp(t*logTau). tau > 0 required.
-    // --------------------------
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static double TauPow(double ti, double logTau)
-        => Math.Exp(Math.FusedMultiplyAdd(ti, logTau, 0.0));
-
-    // --------------------------
-    // Helper: exp( -eta*(delta-eps)^2 - beta*(tau-gam)^2 )
-    // Uses FMA for (eta*dd2 + beta*tt2) then negates.
-    // --------------------------
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static double ExpGaussian(double etai, double dd, double betai, double tt)
-    {
-        double dd2 = dd * dd;
-        double tt2 = tt * tt;
-        double sum = Math.FusedMultiplyAdd(etai, dd2, betai * tt2); // etai*dd2 + betai*tt2
-        return Math.Exp(-sum);
-    }
-
     // ==========================
     // Derivatives
     // Every value and derivative in one pass over the N terms: they all share the same
-    // tau^t and exp(-eta*(delta-eps)^2 - beta*(tau-gamma)^2) factors, so each term's
-    // Exp/Log work is done once per state. Value/dDelta/dTau/dDelta2 keep the exact
-    // arithmetic of the former separate alphaR/alphaR_dDelta/alphaR_dTau/alphaR_dDelta2.
+    // tau^t * exp(-eta*(delta-eps)^2 - beta*(tau-gamma)^2) factor, which is one Exp per term
+    // (tau^t = exp(t*logTau) folded into the exponent, as in TauCache).
     // ==========================
+    public static ResidualDerivatives Derivatives(double delta, double tau) => Derivatives(delta, tau, Math.Log(tau));
+
+    // logTau = Math.Log(tau), shared by every Helmholtz term of one state
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static ResidualDerivatives Derivatives(double delta, double tau)
+    public static ResidualDerivatives Derivatives(double delta, double tau, double logTau)
     {
         // tau must be > 0 for log
         double invTau = 1.0 / tau;
-        double logTau = Math.Log(tau);
 
         // Get refs for Unsafe.Add access (bounds-check elimination)
         ref double betaRef = ref beta[0];
@@ -138,26 +119,25 @@ public static class ResidualHelmholtzGaussian
             double ti = Unsafe.Add(ref tRef, i);
 
             double deltaPow = PowIntDelta(delta, di);
-            double tauPow = TauPow(ti, logTau);
 
             double dd = delta - epsi;
             double tt = tau - gami;
 
-            // expTerm = exp( -eta*dd^2 - beta*tt^2 )
-            double expTerm = ExpGaussian(etai, dd, betai, tt);
+            // tauExp = tau^t * exp( -eta*dd^2 - beta*tt^2 )
+            double tauExp = Math.Exp(Math.FusedMultiplyAdd(ti, logTau, -Math.FusedMultiplyAdd(etai, dd * dd, betai * (tt * tt))));
 
-            // ---- value: term = n * delta^d * tau^t * expTerm ----
-            double term = (ni * deltaPow) * (tauPow * expTerm);
+            // ---- value: term = n * delta^d * tauExp ----
+            double term = (ni * deltaPow) * tauExp;
             sumValue += term;
 
             // ---- d/dδ ----
-            // d/dδ [δ^d * exp(-eta*(δ-eps)^2)] = expTerm * δ^(d-1) * ( d + δ*(-2*eta*(δ-eps)) )
+            // d/dδ [δ^d * exp(-eta*(δ-eps)^2)] = exp(-eta*(δ-eps)^2) * δ^(d-1) * ( d + δ*(-2*eta*(δ-eps)) )
             double deltaPowDm1 = PowIntDeltaMinus1(delta, di);
 
             // inner = d + delta * (-2*eta*dd)
             double inner = Math.FusedMultiplyAdd(delta, (-2.0 * etai * dd), di);
 
-            double termDelta = (ni * tauPow) * (expTerm * (deltaPowDm1 * inner));
+            double termDelta = ni * (tauExp * (deltaPowDm1 * inner));
             sumDelta += termDelta;
 
             // ---- d/dτ: term * ( t/tau - 2*beta*(tau-gamma) ) ----
@@ -206,7 +186,7 @@ public static class ResidualHelmholtzGaussian
             double tmp = u2 + u1Sq;
             double bracket = gpp + (2.0 * gp * u1) + (g * tmp);
 
-            sumDelta2 += (ni * tauPow) * (expTerm * bracket);
+            sumDelta2 += ni * (tauExp * bracket);
 
             // ---- d²/dτ²: term * ( factor^2 + d(factor)/dτ ), d(factor)/dτ = -t/tau^2 - 2*beta ----
             sumTau2 += term * (factor * factor - ti * invTau * invTau - 2.0 * betai);
@@ -269,7 +249,13 @@ public static class ResidualHelmholtzGaussian
     // ==========================
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public static void alphaR_dDelta_dDelta2(double delta, in TauCache cache, out double dDelta, out double dDelta2)
+        => alphaR_dDelta_dDelta2(delta, in cache, out _, out dDelta, out dDelta2);
+
+    // As above plus alphaR itself - everything a fixed-temperature solve needs (p, dp/drho, ln(phi), d ln(phi)/drho)
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public static void alphaR_dDelta_dDelta2(double delta, in TauCache cache, out double value, out double dDelta, out double dDelta2)
     {
+        double sum0 = 0.0;
         ref int dRef = ref dInt[0];
         ref double epsRef = ref epsilon[0];
         ref double etaRef = ref eta[0];
@@ -334,8 +320,10 @@ public static class ResidualHelmholtzGaussian
             double bracket = gpp + (2.0 * gp * u1) + (g * tmp);
 
             sum2 += niTauPowExp * bracket;
+            sum0 += niTauPowExp * g;
         }
 
+        value = sum0;
         dDelta = sum1;
         dDelta2 = sum2;
     }

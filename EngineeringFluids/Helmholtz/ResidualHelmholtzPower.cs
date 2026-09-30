@@ -43,14 +43,14 @@ public static class ResidualHelmholtzPower
 
     // Every value and derivative in one pass: they all share the same delta powers,
     // exp(-delta^l) dampings and tau^t powers, so these are computed once per state.
-    // Value/dDelta/dTau/dDelta2 keep the exact arithmetic of the former separate
-    // alphaR/alphaR_dDelta/alphaR_dTau/alphaR_dDelta2 functions.
+    public static ResidualDerivatives Derivatives(double delta, double tau) => Derivatives(delta, tau, Math.Log(tau));
+
+    // logTau = Math.Log(tau), shared by every Helmholtz term of one state
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static ResidualDerivatives Derivatives(double delta, double tau)
+    public static ResidualDerivatives Derivatives(double delta, double tau, double logTau)
     {
         // powless tau^t: tau must be > 0
         double invTau = 1.0 / tau;
-        double logTau = Math.Log(tau);
 
         double d1p = delta;
         double d2p = delta * delta;
@@ -62,11 +62,11 @@ public static class ResidualHelmholtzPower
         double expNegDelta = Math.Exp(-delta); // l = 1
         double expNegDelta2 = Math.Exp(-d2p);   // l = 2
 
-        // tauPow[i] = exp(t[i]*logTau)
-        double tauPow0 = Math.Exp(Math.FusedMultiplyAdd(t0, logTau, 0.0));
+        // tauPow[i] = exp(t[i]*logTau); t0, t2 and t3 are exactly 1, so those are tau itself (as in TauCache)
+        double tauPow0 = tau;
         double tauPow1 = Math.Exp(Math.FusedMultiplyAdd(t1, logTau, 0.0));
-        double tauPow2 = Math.Exp(Math.FusedMultiplyAdd(t2, logTau, 0.0));
-        double tauPow3 = Math.Exp(Math.FusedMultiplyAdd(t3, logTau, 0.0));
+        double tauPow2 = tau;
+        double tauPow3 = tau;
         double tauPow4 = Math.Exp(Math.FusedMultiplyAdd(t4, logTau, 0.0));
         double tauPow5 = Math.Exp(Math.FusedMultiplyAdd(t5, logTau, 0.0));
         double tauPow6 = Math.Exp(Math.FusedMultiplyAdd(t6, logTau, 0.0));
@@ -248,6 +248,33 @@ public static class ResidualHelmholtzPower
         double s7 = (n7 * c.p7) * (expNegDelta * bracket7);
 
         dDelta2 = s0 + s3 + s4 + s5 + s6 + s7;
+    }
+
+    // As above plus alphaR itself - everything a fixed-temperature solve needs (p, dp/drho, ln(phi), d ln(phi)/drho)
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+    public static void alphaR_dDelta_dDelta2(double delta, in TauCache c, out double value, out double dDelta, out double dDelta2)
+    {
+        double d1p = delta;
+        double d2p = delta * delta;
+        double d3p = d2p * delta;
+        double d4p = d2p * d2p;
+        double d5p = d4p * delta;
+
+        double expNegDelta = Math.Exp(-delta);
+        double expNegDelta2 = Math.Exp(-d2p);
+
+        value = (n0 * d4p) * c.p0 + (n1 * d1p) * c.p1 + (n2 * d1p) * c.p2 + (n3 * d2p) * c.p3 + (n4 * d3p) * c.p4
+              + (n5 * d3p) * (c.p5 * expNegDelta2) + (n6 * d2p) * (c.p6 * expNegDelta2) + (n7 * d3p) * (c.p7 * expNegDelta);
+
+        dDelta = (n0 * c.p0) * (4.0 * d3p) + (n1 * c.p1) + (n2 * c.p2) + (n3 * c.p3) * (2.0 * d1p) + (n4 * c.p4) * (3.0 * d2p)
+               + (n5 * c.p5) * (expNegDelta2 * Math.FusedMultiplyAdd(-2.0, d4p, 3.0 * d2p))
+               + (n6 * c.p6) * (expNegDelta2 * Math.FusedMultiplyAdd(-2.0, d3p, 2.0 * d1p))
+               + (n7 * c.p7) * (expNegDelta * Math.FusedMultiplyAdd(-1.0, d3p, 3.0 * d2p));
+
+        dDelta2 = (n0 * c.p0) * (12.0 * d2p) + (n3 * c.p3) * 2.0 + (n4 * c.p4) * (6.0 * d1p)
+                + (n5 * c.p5) * (expNegDelta2 * Math.FusedMultiplyAdd(4.0, d5p, Math.FusedMultiplyAdd(-14.0, d3p, 6.0 * d1p)))
+                + (n6 * c.p6) * (expNegDelta2 * Math.FusedMultiplyAdd(4.0, d4p, (2.0 - 10.0 * d2p)))
+                + (n7 * c.p7) * (expNegDelta * Math.FusedMultiplyAdd(1.0, d3p, (6.0 * d1p - 6.0 * d2p)));
     }
 
 }

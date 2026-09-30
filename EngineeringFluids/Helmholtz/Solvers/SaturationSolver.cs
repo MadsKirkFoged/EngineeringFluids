@@ -36,7 +36,6 @@ public static class SaturationSolver
         if (!double.IsFinite(T.Kelvin) || T < Ttriple || T >= Tc)
             throw new ArgumentOutOfRangeException(nameof(T), "T must be between triple and critical for saturation.");
 
-        MolarMass M = local.MolarMass;
         Molarity rhoRed = local.Critical.MolarDensity;
 
         Molarity rhoL = BubbleDensity.Density(T);
@@ -68,11 +67,32 @@ public static class SaturationSolver
         // ln(rhoL/rhoV) below which the dome counts as narrow (rhoL/rhoV < 1.105, T within ~9 mK of Tc)
         const double NarrowDome = 0.1;
 
-        static Ammonia State(Temperature t, Molarity rhomolar, MolarMass m) => new Ammonia
+        // T is fixed for the whole solve, so every tau-only factor of the residual Helmholtz terms is computed once
+        // here (as in UpdatePT's density solve) and each iterate only evaluates the delta-dependent exponentials.
+        // The ideal part and the tau derivatives are not needed at all: p, ln(phi) and their density derivatives
+        // depend on alphaR and its delta derivatives only.
+        double tau = (double)(local.Critical.Temperature / T);
+        double logTau = Math.Log(tau);
+        var powCache = new ResidualHelmholtzPower.TauCache(tau, logTau);
+        var gaussianCache = new ResidualHelmholtzGaussian.TauCache(tau, logTau);
+        var gaoBCache = new ResidualHelmholtzGaoB.TauCache(tau, logTau);
+        MolarEnergy RT = local.GasConstant * T;
+
+        // p, ln(phi), dp/drho and rho * d ln(phi)/drho at (T, rho) - the same formulas as Ammonia's properties
+        void Branch(Molarity rho, out Pressure p, out double lnphi, out MolarEnergy dpdrho, out double rhoDlnphi)
         {
-            Temperature = t,
-            Density = rhomolar * m
-        };
+            double delta = (double)(rho / rhoRed);
+            ResidualHelmholtzPower.alphaR_dDelta_dDelta2(delta, in powCache, out double v0, out double d10, out double d20);
+            ResidualHelmholtzGaussian.alphaR_dDelta_dDelta2(delta, in gaussianCache, out double v1, out double d11, out double d21);
+            ResidualHelmholtzGaoB.alphaR_dDelta_dDelta2(delta, in gaoBCache, out double v2, out double d12, out double d22);
+            double ar = v0 + v1 + v2, a1 = d10 + d11 + d12, a2 = d20 + d21 + d22;
+
+            double z = 1 + delta * a1;
+            p = rho * RT * z;
+            lnphi = ar + delta * a1 - Math.Log(z);
+            dpdrho = RT * (1.0 + 2.0 * delta * a1 + delta * delta * a2);
+            rhoDlnphi = delta * (2.0 * a1 + delta * a2 - (a1 + delta * a2) / z);
+        }
 
         // Newton runs in log-density space, so the logarithms are taken of the plain mol/m3 values.
         double u = Math.Log(rhoV.MolesPerCubicMeter);
@@ -87,14 +107,8 @@ public static class SaturationSolver
             rhoV = Molarity.FromMolesPerCubicMeter(Math.Exp(u));
             rhoL = Molarity.FromMolesPerCubicMeter(Math.Exp(u + w));
 
-            var V = State(T, rhoV, M);
-            var L = State(T, rhoL, M);
-
-            Pressure pV = V.Pressure;
-            Pressure pL = L.Pressure;
-
-            double lnphiV = V.LNFugacityCoefficient;
-            double lnphiL = L.LNFugacityCoefficient;
+            Branch(rhoV, out Pressure pV, out double lnphiV, out MolarEnergy dpV, out double rhoDlnphiV);
+            Branch(rhoL, out Pressure pL, out double lnphiL, out MolarEnergy dpL, out double rhoDlnphiL);
 
             Pressure F1 = pL - pV;
             double F2 = lnphiL - lnphiV;
@@ -106,16 +120,10 @@ public static class SaturationSolver
                 return NonTrivial(new SatResult(T, psat, rhoL, rhoV), wAncillary);
             }
 
-            MolarEnergy dpL = L.dp_drhomolar_constT;
-            MolarEnergy dpV = V.dp_drhomolar_constT;
-
-            var dlnphiL = L.dLnPhi_dRhomolar_constT;
-            var dlnphiV = V.dLnPhi_dRhomolar_constT;
-
             Pressure a11 = dpL * rhoL - dpV * rhoV;
             Pressure a12 = dpL * rhoL;
-            double a21 = (double)(dlnphiL * rhoL - dlnphiV * rhoV);
-            double a22 = (double)(dlnphiL * rhoL);
+            double a21 = rhoDlnphiL - rhoDlnphiV;
+            double a22 = rhoDlnphiL;
 
             Pressure det = a11 * a22 - a12 * a21;
             if (!det.HasValue() || det.Abs() < Pressure.FromPascal(1e-30))

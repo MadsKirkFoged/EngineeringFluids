@@ -23,10 +23,10 @@ public static class IdealHelmholtzPlanckEinstein
     // ----------------------------
 
     /// <summary>
-    /// Stable expm1(x) = exp(x) - 1 for small |x|.
+    /// Stable expm1(x) = exp(x) - 1 for small |x|; <paramref name="expX"/> is Math.Exp(x), already computed by the caller.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static double Expm1(double x)
+    private static double Expm1(double x, double expX)
     {
         // For very small x, exp(x)-1 loses precision; use a short series.
         // Threshold chosen to keep error tiny while keeping it fast.
@@ -40,7 +40,7 @@ public static class IdealHelmholtzPlanckEinstein
             double x5 = x4 * x;
             return x + 0.5 * x2 + (1.0 / 6.0) * x3 + (1.0 / 24.0) * x4 + (1.0 / 120.0) * x5;
         }
-        return Math.Exp(x) - 1.0;
+        return expX - 1.0;
     }
 
     /// <summary>
@@ -70,18 +70,18 @@ public static class IdealHelmholtzPlanckEinstein
     ///   else         =&gt; log(-expm1(x))
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static double Log1mExp(double x)
+    private static double Log1mExp(double x, double expX)
     {
         // x should be <= 0 in our usage (t_i negative, tau >= 0)
         if (x < -Ln2)
         {
             // exp(x) is <= 0.5, so -exp(x) is in [-0.5, 0] and log1p is well-behaved.
-            return Log1p(-Math.Exp(x));
+            return Log1p(-expX);
         }
         else
         {
             // expm1(x) is negative and close to 0; -expm1(x) is small positive.
-            return Math.Log(-Expm1(x));
+            return Math.Log(-Expm1(x, expX));
         }
     }
 
@@ -99,8 +99,12 @@ public static class IdealHelmholtzPlanckEinstein
         double x1 = t1 * tau;
         double x2 = t2 * tau;
 
+        // exp(x_i) once per term, shared by the value (Log1mExp) and the derivatives (Expm1) - bit-identical to
+        // calling both separately, which evaluated the same Math.Exp twice
+        double ex0 = Math.Exp(x0), ex1 = Math.Exp(x1), ex2 = Math.Exp(x2);
+
         // alpha0 = Σ n_i * log(1 - exp(x_i))   because c=1, d=-1
-        double value = (n0 * Log1mExp(x0)) + (n1 * Log1mExp(x1)) + (n2 * Log1mExp(x2));
+        double value = (n0 * Log1mExp(x0, ex0)) + (n1 * Log1mExp(x1, ex1)) + (n2 * Log1mExp(x2, ex2));
 
         // d/dtau:
         // Σ n * d * t * exp(x) / (1 + d*exp(x)), with d=-1
@@ -115,9 +119,9 @@ public static class IdealHelmholtzPlanckEinstein
         // => t * exp(x) / expm1(x)
         //
         // This is numerically stable when x ~ 0- because expm1(x) keeps precision.
-        double em10 = Expm1(x0);
-        double em11 = Expm1(x1);
-        double em12 = Expm1(x2);
+        double em10 = Expm1(x0, ex0);
+        double em11 = Expm1(x1, ex1);
+        double em12 = Expm1(x2, ex2);
 
         double e0 = em10 + 1.0;
         double e1 = em11 + 1.0;
