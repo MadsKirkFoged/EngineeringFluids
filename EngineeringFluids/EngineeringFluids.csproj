@@ -5,10 +5,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- NuGet package. The version is set by the release workflow from the git tag (v1.2.3 -> 1.2.3). -->
+  <!-- NuGet package. Every push to main publishes 0.1.<run number> (see .github/workflows/nuget.yml);
+       bump the first two numbers here for a new minor/major release. -->
   <PropertyGroup>
+    <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
     <PackageId>EngineeringFluids</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.$(BuildNumber)</Version>
     <Authors>Mads Kirk Foged</Authors>
     <Description>Fast, unit-typed thermodynamic and transport properties for engineering fluids (Ammonia/R717), matching CoolProp. Built on EngineeringUnits.Fast.</Description>
     <PackageTags>thermodynamics;fluids;refrigerants;ammonia;R717;coolprop;engineering;units</PackageTags>
