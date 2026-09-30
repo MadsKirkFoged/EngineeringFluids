@@ -103,10 +103,21 @@ public class CoolPropOracle_UpdateTX_Tests
     }
 
     [TestMethod]
-    public void UpdateTX_Throws_NearCriticalPoint()
+    public void UpdateTX_Throws_OnlyInTheLastMillikelvinBelowTc()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Temperature.FromKelvin(Tc - 0.5), 0.5));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTX(Temperature.FromKelvin(Tc - 0.0005), 0.5));
+
+        foreach (double t in new[] { Tc - 0.5, Tc - 0.005 })
+        {
+            var fast = new Ammonia();
+            fast.UpdateTX(Temperature.FromKelvin(t), 0.5);
+            var exact = new Ammonia();
+            exact.UpdateTXExact(Temperature.FromKelvin(t), 0.5);
+            Assert.AreEqual(exact.Pressure.Pascal, fast.Pressure.Pascal, 1e-8 * exact.Pressure.Pascal, $"p at T={t}");
+            Assert.AreEqual(exact.Density.KilogramPerCubicMeter, fast.Density.KilogramPerCubicMeter, 1e-7 * exact.Density.KilogramPerCubicMeter, $"rho at T={t}");
+            Assert.AreEqual(exact.Entropy.JoulePerKilogramKelvin, fast.Entropy.JoulePerKilogramKelvin, 1e-7 * exact.Entropy.JoulePerKilogramKelvin, $"s at T={t}");
+        }
     }
 
     // ------------------------------------------------------------------

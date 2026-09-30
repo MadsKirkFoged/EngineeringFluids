@@ -98,12 +98,17 @@ public static class ResidualHelmholtzGaussian
     }
 
     // ==========================
-    // alphaR
+    // Derivatives
+    // Every value and derivative in one pass over the N terms: they all share the same
+    // tau^t and exp(-eta*(delta-eps)^2 - beta*(tau-gamma)^2) factors, so each term's
+    // Exp/Log work is done once per state. Value/dDelta/dTau/dDelta2 keep the exact
+    // arithmetic of the former separate alphaR/alphaR_dDelta/alphaR_dTau/alphaR_dDelta2.
     // ==========================
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static double alphaR(double delta, double tau)
+    public static ResidualDerivatives Derivatives(double delta, double tau)
     {
         // tau must be > 0 for log
+        double invTau = 1.0 / tau;
         double logTau = Math.Log(tau);
 
         // Get refs for Unsafe.Add access (bounds-check elimination)
@@ -115,7 +120,12 @@ public static class ResidualHelmholtzGaussian
         ref double nRef = ref n[0];
         ref double tRef = ref t[0];
 
-        double sum = 0.0;
+        double sumValue = 0.0;
+        double sumDelta = 0.0;
+        double sumTau = 0.0;
+        double sumDelta2 = 0.0;
+        double sumTau2 = 0.0;
+        double sumDeltaTau = 0.0;
 
         for (int i = 0; i < N; i++)
         {
@@ -128,49 +138,6 @@ public static class ResidualHelmholtzGaussian
             double ti = Unsafe.Add(ref tRef, i);
 
             double deltaPow = PowIntDelta(delta, di);
-            double tauPow = TauPow(ti, logTau);
-
-            double dd = delta - epsi;
-            double tt = tau - gami;
-
-            double expTerm = ExpGaussian(etai, dd, betai, tt);
-
-            // term = n * deltaPow * tauPow * expTerm
-            sum += (ni * deltaPow) * (tauPow * expTerm);
-        }
-
-        return sum;
-    }
-
-    // ==========================
-    // alphaR_dDelta
-    // ==========================
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static double alphaR_dDelta(double delta, double tau)
-    {
-        // tau must be > 0 for log
-        double logTau = Math.Log(tau);
-
-        ref double betaRef = ref beta[0];
-        ref int dRef = ref dInt[0];
-        ref double epsRef = ref epsilon[0];
-        ref double etaRef = ref eta[0];
-        ref double gamRef = ref gamma[0];
-        ref double nRef = ref n[0];
-        ref double tRef = ref t[0];
-
-        double sum = 0.0;
-
-        for (int i = 0; i < N; i++)
-        {
-            double betai = Unsafe.Add(ref betaRef, i);
-            int di = Unsafe.Add(ref dRef, i);
-            double epsi = Unsafe.Add(ref epsRef, i);
-            double etai = Unsafe.Add(ref etaRef, i);
-            double gami = Unsafe.Add(ref gamRef, i);
-            double ni = Unsafe.Add(ref nRef, i);
-            double ti = Unsafe.Add(ref tRef, i);
-
             double tauPow = TauPow(ti, logTau);
 
             double dd = delta - epsi;
@@ -179,71 +146,76 @@ public static class ResidualHelmholtzGaussian
             // expTerm = exp( -eta*dd^2 - beta*tt^2 )
             double expTerm = ExpGaussian(etai, dd, betai, tt);
 
-            // derivative w.r.t delta:
+            // ---- value: term = n * delta^d * tau^t * expTerm ----
+            double term = (ni * deltaPow) * (tauPow * expTerm);
+            sumValue += term;
+
+            // ---- d/dδ ----
             // d/dδ [δ^d * exp(-eta*(δ-eps)^2)] = expTerm * δ^(d-1) * ( d + δ*(-2*eta*(δ-eps)) )
-            // Full term: n * tau^t * exp(-beta*(tau-gam)^2) * above
-            // Since expTerm already includes both delta and tau exponentials, we can use it directly:
             double deltaPowDm1 = PowIntDeltaMinus1(delta, di);
 
             // inner = d + delta * (-2*eta*dd)
             double inner = Math.FusedMultiplyAdd(delta, (-2.0 * etai * dd), di);
 
-            // sum += n * tauPow * expTerm * delta^(d-1) * inner
-            sum += (ni * tauPow) * (expTerm * (deltaPowDm1 * inner));
-        }
+            double termDelta = (ni * tauPow) * (expTerm * (deltaPowDm1 * inner));
+            sumDelta += termDelta;
 
-        return sum;
-    }
-
-    // ==========================
-    // alphaR_dTau
-    // ==========================
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static double alphaR_dTau(double delta, double tau)
-    {
-        // tau must be > 0 for log
-        double invTau = 1.0 / tau;
-        double logTau = Math.Log(tau);
-
-        ref double betaRef = ref beta[0];
-        ref int dRef = ref dInt[0];
-        ref double epsRef = ref epsilon[0];
-        ref double etaRef = ref eta[0];
-        ref double gamRef = ref gamma[0];
-        ref double nRef = ref n[0];
-        ref double tRef = ref t[0];
-
-        double sum = 0.0;
-
-        for (int i = 0; i < N; i++)
-        {
-            double betai = Unsafe.Add(ref betaRef, i);
-            int di = Unsafe.Add(ref dRef, i);
-            double epsi = Unsafe.Add(ref epsRef, i);
-            double etai = Unsafe.Add(ref etaRef, i);
-            double gami = Unsafe.Add(ref gamRef, i);
-            double ni = Unsafe.Add(ref nRef, i);
-            double ti = Unsafe.Add(ref tRef, i);
-
-            double deltaPow = PowIntDelta(delta, di);
-            double tauPow = TauPow(ti, logTau);
-
-            double dd = delta - epsi;
-            double tt = tau - gami;
-
-            double expTerm = ExpGaussian(etai, dd, betai, tt);
-
-            // term = n * delta^d * tau^t * expTerm
-            double term = (ni * deltaPow) * (tauPow * expTerm);
-
-            // d/dtau term = term * ( t/tau - 2*beta*(tau-gamma) )
-            // factor = t*invTau + (-2*beta*tt)
+            // ---- d/dτ: term * ( t/tau - 2*beta*(tau-gamma) ) ----
             double factor = Math.FusedMultiplyAdd(ti, invTau, (-2.0 * betai * tt));
+            sumTau += term * factor;
 
-            sum += term * factor;
+            // ---- d²/dδ² ----
+            // g = delta^d, gp = d*delta^(d-1), gpp = d*(d-1)*delta^(d-2)
+            // d in {1,2,3} so do it branchlessly-ish via switch
+            double g, gp, gpp;
+            switch (di)
+            {
+                case 1:
+                    g = delta;
+                    gp = 1.0;
+                    gpp = 0.0;
+                    break;
+
+                case 2:
+                    g = delta * delta;
+                    gp = 2.0 * delta;
+                    gpp = 2.0;
+                    break;
+
+                case 3:
+                    double d2 = delta * delta;
+                    g = d2 * delta;
+                    gp = 3.0 * d2;
+                    gpp = 6.0 * delta;
+                    break;
+
+                default:
+                    // Should never happen with current dInt, but keep correctness.
+                    g = Math.Pow(delta, di);
+                    gp = (di == 0) ? 0.0 : di * Math.Pow(delta, di - 1);
+                    gpp = (di <= 1) ? 0.0 : di * (di - 1) * Math.Pow(delta, di - 2);
+                    break;
+            }
+
+            // u(delta) = -eta*(delta-eps)^2, u' = -2*eta*(delta-eps), u'' = -2*eta
+            double u1 = (-2.0 * etai) * dd;
+            double u2 = -2.0 * etai;
+
+            // bracket = g'' + 2*g'*u' + g*(u'' + u'^2)
+            double u1Sq = u1 * u1;
+            double tmp = u2 + u1Sq;
+            double bracket = gpp + (2.0 * gp * u1) + (g * tmp);
+
+            sumDelta2 += (ni * tauPow) * (expTerm * bracket);
+
+            // ---- d²/dτ²: term * ( factor^2 + d(factor)/dτ ), d(factor)/dτ = -t/tau^2 - 2*beta ----
+            sumTau2 += term * (factor * factor - ti * invTau * invTau - 2.0 * betai);
+
+            // ---- d²/dδdτ: (d/dδ term) * factor ----
+            sumDeltaTau += termDelta * factor;
         }
 
-        return sum;
+        return new ResidualDerivatives(sumValue, sumDelta, sumTau, sumDelta2, sumTau2, sumDeltaTau);
     }
 
     [System.Runtime.CompilerServices.InlineArray(N)]
@@ -292,8 +264,8 @@ public static class ResidualHelmholtzGaussian
 
     // ==========================
     // alphaR_dDelta_dDelta2 (precomputed TauCache overload)
-    // Same fused first+second delta-derivative as below, but only recomputes the
-    // delta-dependent exponential each iteration (see TauCache remarks).
+    // Fused first+second delta-derivative for the density Newton solve that only recomputes
+    // the delta-dependent exponential each iteration (see TauCache remarks).
     // ==========================
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public static void alphaR_dDelta_dDelta2(double delta, in TauCache cache, out double dDelta, out double dDelta2)
@@ -368,192 +340,4 @@ public static class ResidualHelmholtzGaussian
         dDelta2 = sum2;
     }
 
-    // ==========================
-    // alphaR_dDelta_dDelta2
-    // Fused first+second delta-derivative in one pass over the N terms.
-    // The Newton solver needs both every iteration; computing them separately
-    // (as alphaR_dDelta + alphaR_dDelta2) redundantly evaluates tauPow/expTerm
-    // (2 Math.Exp calls per term) twice. This halves that to 1 pass. [benchmark-guided]
-    // ==========================
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static void alphaR_dDelta_dDelta2(double delta, double tau, out double dDelta, out double dDelta2)
-    {
-        double logTau = Math.Log(tau);
-
-        ref double betaRef = ref beta[0];
-        ref int dRef = ref dInt[0];
-        ref double epsRef = ref epsilon[0];
-        ref double etaRef = ref eta[0];
-        ref double gamRef = ref gamma[0];
-        ref double nRef = ref n[0];
-        ref double tRef = ref t[0];
-
-        double sum1 = 0.0;
-        double sum2 = 0.0;
-
-        for (int i = 0; i < N; i++)
-        {
-            double betai = Unsafe.Add(ref betaRef, i);
-            int di = Unsafe.Add(ref dRef, i);
-            double epsi = Unsafe.Add(ref epsRef, i);
-            double etai = Unsafe.Add(ref etaRef, i);
-            double gami = Unsafe.Add(ref gamRef, i);
-            double ni = Unsafe.Add(ref nRef, i);
-            double ti = Unsafe.Add(ref tRef, i);
-
-            double tauPow = TauPow(ti, logTau);
-
-            double dd = delta - epsi;
-            double tt = tau - gami;
-
-            // Computed ONCE and reused for both derivatives.
-            double expTerm = ExpGaussian(etai, dd, betai, tt);
-            double niTauPowExp = ni * tauPow * expTerm;
-
-            // --- first derivative wrt delta ---
-            double deltaPowDm1 = PowIntDeltaMinus1(delta, di);
-            double inner = Math.FusedMultiplyAdd(delta, (-2.0 * etai * dd), di);
-            sum1 += niTauPowExp * (deltaPowDm1 * inner);
-
-            // --- second derivative wrt delta ---
-            double g, gp, gpp;
-            switch (di)
-            {
-                case 1:
-                    g = delta;
-                    gp = 1.0;
-                    gpp = 0.0;
-                    break;
-
-                case 2:
-                    g = delta * delta;
-                    gp = 2.0 * delta;
-                    gpp = 2.0;
-                    break;
-
-                case 3:
-                    double d2 = delta * delta;
-                    g = d2 * delta;
-                    gp = 3.0 * d2;
-                    gpp = 6.0 * delta;
-                    break;
-
-                default:
-                    g = Math.Pow(delta, di);
-                    gp = (di == 0) ? 0.0 : di * Math.Pow(delta, di - 1);
-                    gpp = (di <= 1) ? 0.0 : di * (di - 1) * Math.Pow(delta, di - 2);
-                    break;
-            }
-
-            double u1 = (-2.0 * etai) * dd;
-            double u2 = -2.0 * etai;
-            double u1Sq = u1 * u1;
-            double tmp = u2 + u1Sq;
-            double bracket = gpp + (2.0 * gp * u1) + (g * tmp);
-
-            sum2 += niTauPowExp * bracket;
-        }
-
-        dDelta = sum1;
-        dDelta2 = sum2;
-    }
-
-    // ==========================
-    // alphaR_dDelta2
-    // second derivative w.r.t delta
-    // Keeps your general formula, but with:
-    // - integer-power g,g',g'' specialized for d in {1,2,3}
-    // - expAll computed once (includes both delta and tau exponentials)
-    // - powless tau^t
-    // ==========================
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static double alphaR_dDelta2(double delta, double tau)
-    {
-        // tau must be > 0 for log
-        double logTau = Math.Log(tau);
-
-        ref double betaRef = ref beta[0];
-        ref int dRef = ref dInt[0];
-        ref double epsRef = ref epsilon[0];
-        ref double etaRef = ref eta[0];
-        ref double gamRef = ref gamma[0];
-        ref double nRef = ref n[0];
-        ref double tRef = ref t[0];
-
-        double sum = 0.0;
-
-        for (int i = 0; i < N; i++)
-        {
-            double betai = Unsafe.Add(ref betaRef, i);
-            int di = Unsafe.Add(ref dRef, i);
-            double epsi = Unsafe.Add(ref epsRef, i);
-            double etai = Unsafe.Add(ref etaRef, i);
-            double gami = Unsafe.Add(ref gamRef, i);
-            double ni = Unsafe.Add(ref nRef, i);
-            double ti = Unsafe.Add(ref tRef, i);
-
-            // tau^t (powless)
-            double tauPow = TauPow(ti, logTau);
-
-            double dd = delta - epsi;
-            double tt = tau - gami;
-
-            // expAll = exp( -eta*dd^2 - beta*tt^2 )
-            double expAll = ExpGaussian(etai, dd, betai, tt);
-
-            // g = delta^d, gp = d*delta^(d-1), gpp = d*(d-1)*delta^(d-2)
-            // d in {1,2,3} so do it branchlessly-ish via switch
-            double g, gp, gpp;
-            switch (di)
-            {
-                case 1:
-                    g = delta;
-                    gp = 1.0;
-                    gpp = 0.0;
-                    break;
-
-                case 2:
-                    g = delta * delta;
-                    gp = 2.0 * delta;
-                    gpp = 2.0;
-                    break;
-
-                case 3:
-                    double d2 = delta * delta;
-                    g = d2 * delta;
-                    gp = 3.0 * d2;
-                    gpp = 6.0 * delta;
-                    break;
-
-                default:
-                    // Should never happen with current dInt, but keep correctness.
-                    g = Math.Pow(delta, di);
-                    gp = (di == 0) ? 0.0 : di * Math.Pow(delta, di - 1);
-                    gpp = (di <= 1) ? 0.0 : di * (di - 1) * Math.Pow(delta, di - 2);
-                    break;
-            }
-
-            // u(delta) = -eta*(delta-eps)^2
-            // u' = -2*eta*(delta-eps)
-            // u'' = -2*eta
-            double u1 = (-2.0 * etai) * dd;
-            double u2 = -2.0 * etai;
-
-            // bracket = g'' + 2*g'*u' + g*(u'' + u'^2)
-            // Use FMA in a couple places to reduce ops:
-            double u1Sq = u1 * u1;
-
-            // tmp = u2 + u1^2
-            double tmp = u2 + u1Sq;
-
-            // bracket = gpp + 2*gp*u1 + g*tmp
-            // 2*gp*u1 is simple multiply.
-            double bracket = gpp + (2.0 * gp * u1) + (g * tmp);
-
-            // d2 += n * tau^t * expAll * bracket
-            sum += (ni * tauPow) * (expAll * bracket);
-        }
-
-        return sum;
-    }
 }

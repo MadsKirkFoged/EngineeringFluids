@@ -45,4 +45,53 @@ public class DerivativeTests
     {
         AssertDDelta2MatchesFiniteDifference(400.0, 1.4748450193131541, "Liquid-like point");
     }
+
+    // ------------------------------------------------------------------
+    // Second tau derivatives (used by Cp, Cv and the speed of sound): central differences of the
+    // first derivatives in tau at fixed delta. Each point is (T, delta) - vapor, liquid, near-critical
+    // and supercritical - so every residual class (power, Gaussian, Gao-B) contributes noticeably.
+    // ------------------------------------------------------------------
+    private static readonly double Tc = Ref.Critical.Temperature.Kelvin;
+
+    private static Ammonia StateAtTau(double tau, double delta) => StateAt(Tc / tau, delta);
+
+    public static IEnumerable<object[]> TauDerivativePoints()
+    {
+        yield return new object[] { 400.0, 0.0386 };  // vapor
+        yield return new object[] { 280.0, 2.73 };    // liquid
+        yield return new object[] { 406.0, 1.0 };     // near-critical
+        yield return new object[] { 600.0, 0.5 };     // supercritical
+    }
+
+    [DataTestMethod]
+    [DynamicData(nameof(TauDerivativePoints), DynamicDataSourceType.Method)]
+    public void SecondTauDerivatives_MatchFiniteDifference(double T, double delta)
+    {
+        double tau = Tc / T;
+        double h = 1e-6 * tau;
+        Ammonia plus = StateAtTau(tau + h, delta), minus = StateAtTau(tau - h, delta), at = StateAtTau(tau, delta);
+
+        double num0 = (plus.Alpha0_dTau - minus.Alpha0_dTau) / (2.0 * h);
+        double numR = (plus.AlphaR_dTau - minus.AlphaR_dTau) / (2.0 * h);
+
+        Assert.AreEqual(num0, at.Alpha0_dTau2, 1e-6 * Math.Max(1.0, Math.Abs(num0)), "Alpha0_dTau2");
+        Assert.AreEqual(numR, at.AlphaR_dTau2, 1e-6 * Math.Max(1.0, Math.Abs(numR)), "AlphaR_dTau2");
+    }
+
+    [DataTestMethod]
+    [DynamicData(nameof(TauDerivativePoints), DynamicDataSourceType.Method)]
+    public void MixedDerivative_MatchesFiniteDifference_InBothDirections(double T, double delta)
+    {
+        double tau = Tc / T;
+        double hTau = 1e-6 * tau;
+        double hDelta = AdaptiveEps(delta);
+
+        // d/dtau of alphaR_delta and d/ddelta of alphaR_tau must both equal alphaR_deltatau
+        double viaTau = (StateAtTau(tau + hTau, delta).AlphaR_dDelta - StateAtTau(tau - hTau, delta).AlphaR_dDelta) / (2.0 * hTau);
+        double viaDelta = (StateAtTau(tau, delta + hDelta).AlphaR_dTau - StateAtTau(tau, delta - hDelta).AlphaR_dTau) / (2.0 * hDelta);
+        double analytic = StateAtTau(tau, delta).AlphaR_dDeltadTau;
+
+        Assert.AreEqual(viaTau, analytic, 1e-6 * Math.Max(1.0, Math.Abs(analytic)), "via tau");
+        Assert.AreEqual(viaDelta, analytic, 1e-6 * Math.Max(1.0, Math.Abs(analytic)), "via delta");
+    }
 }

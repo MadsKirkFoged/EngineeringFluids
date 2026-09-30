@@ -122,13 +122,24 @@ public class CoolPropOracle_UpdatePX_Tests
     }
 
     [TestMethod]
-    public void UpdatePX_Throws_NearCriticalPoint()
+    public void UpdatePX_Throws_OnlyInTheLastMillikelvinBelowTc()
     {
-        // Within the last 1K below Tc, ancillary-based rhoL/rhoV lose too much accuracy
-        // (see UpdatePX.cs remarks and the sweep test below) - UpdatePX rejects it
-        // outright instead of silently returning an inaccurate state.
+        // The ancillary tables track the EOS dome to within 1 mK of Tc (was 1 K with the old float fits), where even
+        // the exact densities become ill-conditioned; UpdatePX rejects only that last millikelvin.
         var a = new Ammonia();
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(Pressure.FromPascal(Pc * 0.995), 0.5));
+        Pressure pLastMilliKelvin = SaturationPressure.Pressure(Temperature.FromKelvin(Tc - 0.0005));
+        Assert.ThrowsException<InvalidOperationException>(() => a.UpdatePX(pLastMilliKelvin, 0.5));
+
+        foreach (double p in new[] { Pc * 0.995, SaturationPressure.Pressure(Temperature.FromKelvin(Tc - 0.005)).Pascal })
+        {
+            var fast = new Ammonia();
+            fast.UpdatePX(Pressure.FromPascal(p), 0.5);
+            var exact = new Ammonia();
+            exact.UpdatePXExact(Pressure.FromPascal(p), 0.5);
+            Assert.AreEqual(exact.Temperature.Kelvin, fast.Temperature.Kelvin, 1e-8, $"T at p={p}");
+            Assert.AreEqual(exact.Density.KilogramPerCubicMeter, fast.Density.KilogramPerCubicMeter, 1e-7 * exact.Density.KilogramPerCubicMeter, $"rho at p={p}");
+            Assert.AreEqual(exact.Enthalpy.JoulePerKilogram, fast.Enthalpy.JoulePerKilogram, 1e-7 * exact.Enthalpy.JoulePerKilogram, $"h at p={p}");
+        }
     }
 
     [DataTestMethod]

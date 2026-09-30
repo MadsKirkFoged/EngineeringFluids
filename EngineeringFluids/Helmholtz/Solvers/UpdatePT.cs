@@ -52,7 +52,24 @@ public static partial class Update
 
         // Set final state
         local.Density = rhomolar * local.MolarMass;
-        // local._Q is internal; in your model, Q is derived from _isTwoPhase so this is enough.
+        local.SetPhase(strictHint ? phase : PhaseAfterPT(local, T, p, phase));
+    }
+
+    // CoolProp's label for a PT state (T_phase_determination_pure_or_pseudopure with P given): above Tc by
+    // P vs Pc, exactly at Tc by P vs Pc (including the critical point itself), below Tc SupercriticalLiquid
+    // above Pc and otherwise liquid/gas from the saturation pressure (the solver's own branch).
+    private static Phases PhaseAfterPT(Ammonia a, Temperature T, Pressure p, Phases solverBranch)
+    {
+        Temperature Tc = a.Critical.Temperature;
+        Pressure Pc = a.Critical.Pressure;
+
+        if (T > Tc)
+            return p > Pc ? Phases.Supercritical : Phases.SupercriticalGas;
+        if (T == Tc)
+            return p == Pc ? Phases.CriticalPoint : p > Pc ? Phases.SupercriticalLiquid : Phases.SupercriticalGas;
+        if (p > Pc)
+            return Phases.SupercriticalLiquid;
+        return solverBranch;
     }
 
     /// <summary>
@@ -109,7 +126,7 @@ public static partial class Update
             // by sweep: dropping it roughly doubles average Newton iterations and makes the
             // solver fail outright on many points using the fallback guess alone.
             // [benchmark-guided]
-            if (T > a.TripleLiquid.Temperature + TemperatureMargin && T < a.Critical.Temperature - TemperatureMargin)
+            if (T >= a.TripleLiquid.Temperature && T < a.Critical.Temperature - TemperatureMargin)
             {
                 Molarity rhoL = BubbleDensity.Density(T);
                 if (rhoL.HasValue() && rhoL.IsAboveZero())
@@ -124,7 +141,9 @@ public static partial class Update
         return Molarity.Max(rhoIdeal, 0.5 * a.Critical.MolarDensity);
     }
 
-    // Keeps the ancillary lookups strictly inside (triple, critical).
+    // Keeps the ancillary lookups away from the critical point. They are fitted from the triple point up, so the
+    // triple point itself is included: SharpFluids clamps to exactly LimitTemperatureMin = Ttriple, and without a
+    // bubble-density guess the liquid solve there used to fail to bracket at every pressure.
     private static readonly Temperature TemperatureMargin = Temperature.FromKelvin(1e-6);
 
     /// <summary>
@@ -150,7 +169,7 @@ public static partial class Update
             Temperature Tc = a.Critical.Temperature;
             Temperature Ttriple = a.TripleLiquid.Temperature;
 
-            if (T > Ttriple + TemperatureMargin && T < Tc - TemperatureMargin)
+            if (T >= Ttriple && T < Tc - TemperatureMargin)
             {
                 // Reuse the dew density already computed by GuessRhoMolar for the initial
                 // guess instead of evaluating the same ancillary polynomial a second time.
@@ -355,7 +374,13 @@ public static partial class Update
             }
         }
 
-        return 0.5 * (lo + hi);
+        // 80 halvings have shrunk the bracket to rounding level. If the pressure still does not match, the
+        // bracket held a discontinuity (e.g. NaN from the EOS) rather than a root - never return that silently.
+        Molarity last = 0.5 * (lo + hi);
+        SetState(a, T, last);
+        if (!(Math.Abs(Resid(a.Pressure, pTarget)) <= 1e-6))
+            throw new InvalidOperationException($"UpdatePT: density bisection did not converge. T={T.Kelvin} K, P={pTarget.Pascal} Pa.");
+        return last;
 
         static void SetState(Ammonia a, Temperature T, Molarity rhomolar)
         {

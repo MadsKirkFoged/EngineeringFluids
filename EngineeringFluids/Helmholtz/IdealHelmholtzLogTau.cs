@@ -1,25 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EngineeringFluids.Helmholtz;
 public static class IdealHelmholtzLogTau
 {
-
-
-    public static double Alpha0(double delta, double tau)
+    // alpha0 = 3*ln(tau)
+    public static IdealDerivatives Derivatives(double delta, double tau)
     {
-        return 3 * Math.Log(tau);
+        return new IdealDerivatives(3 * Math.Log(tau), 3 / tau, -3 / (tau * tau));
     }
-
-
-    public static double Alpha0_dTau(double delta, double tau)
-    {
-        // The derivative of the function with respect to tau
-        return 3 / tau;
-    }
-
-
 }

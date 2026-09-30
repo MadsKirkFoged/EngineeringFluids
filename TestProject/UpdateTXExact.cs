@@ -100,11 +100,22 @@ public class CoolPropOracle_UpdateTXExact_Tests
     }
 
     [TestMethod]
-    public void UpdateTXExact_Throws_AtOrBelowTripleTemperature()
+    public void UpdateTXExact_Throws_BelowTripleTemperature()
     {
         var a = new Ammonia();
-        Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTXExact(Temperature.FromKelvin(Ttriple), 0.5));
         Assert.ThrowsException<InvalidOperationException>(() => a.UpdateTXExact(Temperature.FromKelvin(Ttriple - 1.0), 0.5));
+    }
+
+    // Like CoolProp (and SharpFluids' UpdateXT), the triple temperature itself works. Its saturation pressure is
+    // the EOS's own 6055.8 Pa, not the tabulated triple-point pressure of 6091.2 Pa (those densities don't belong
+    // to this EOS - see SaturationSolver.SaturationAtT).
+    [TestMethod]
+    public void UpdateTXExact_AtTripleTemperature_GivesTheEosSaturationState()
+    {
+        var a = new Ammonia();
+        a.UpdateTXExact(Temperature.FromKelvin(Ttriple), 0.5);
+        Assert.AreEqual(6055.81357399642, a.Pressure.Pascal, 1e-3);
+        Assert.AreEqual(0.5, a.Quality);
     }
 
     // ------------------------------------------------------------------

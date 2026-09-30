@@ -90,7 +90,7 @@ public static class IdealHelmholtzPlanckEinstein
     // ----------------------------
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static double Alpha0(double delta, double tau)
+    public static IdealDerivatives Derivatives(double delta, double tau)
     {
         // delta is unused (kept for signature compatibility)
 
@@ -100,15 +100,9 @@ public static class IdealHelmholtzPlanckEinstein
         double x2 = t2 * tau;
 
         // alpha0 = Σ n_i * log(1 - exp(x_i))   because c=1, d=-1
-        return (n0 * Log1mExp(x0)) + (n1 * Log1mExp(x1)) + (n2 * Log1mExp(x2));
-    }
+        double value = (n0 * Log1mExp(x0)) + (n1 * Log1mExp(x1)) + (n2 * Log1mExp(x2));
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public static double Alpha0_dTau(double delta, double tau)
-    {
-        // delta is unused (kept for signature compatibility)
-
-        // Original:
+        // d/dtau:
         // Σ n * d * t * exp(x) / (1 + d*exp(x)), with d=-1
         // => Σ n * (-t) * exp(x) / (1 - exp(x))
         //
@@ -121,11 +115,6 @@ public static class IdealHelmholtzPlanckEinstein
         // => t * exp(x) / expm1(x)
         //
         // This is numerically stable when x ~ 0- because expm1(x) keeps precision.
-
-        double x0 = t0 * tau;
-        double x1 = t1 * tau;
-        double x2 = t2 * tau;
-
         double em10 = Expm1(x0);
         double em11 = Expm1(x1);
         double em12 = Expm1(x2);
@@ -138,6 +127,11 @@ public static class IdealHelmholtzPlanckEinstein
         double s1 = n1 * t1 * (e1 / em11);
         double s2 = n2 * t2 * (e2 / em12);
 
-        return s0 + s1 + s2;
+        // d2/dtau2 of n*t*exp(x)/expm1(x) = -n * t^2 * exp(x) / expm1(x)^2
+        double q0 = -(n0 * t0 * t0) * (e0 / (em10 * em10));
+        double q1 = -(n1 * t1 * t1) * (e1 / (em11 * em11));
+        double q2 = -(n2 * t2 * t2) * (e2 / (em12 * em12));
+
+        return new IdealDerivatives(value, s0 + s1 + s2, q0 + q1 + q2);
     }
 }

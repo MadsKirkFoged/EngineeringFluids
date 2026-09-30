@@ -6,25 +6,17 @@ using System;
 public static partial class Update
 {
     // Exact (EOS-based) counterpart to UpdateTX.cs: instead of reading rhoL/rhoV/Psat off
-    // the pre-fitted ancillary polynomials, this solves the real phase-equilibrium conditions
-    // (equal pressure, equal fugacity) against the actual Helmholtz EOS via SolveAtT. Not
-    // rejected within the last ~1 K of Tc or ~15-20 K of the triple point the way the ancillary
-    // version's reliable range is bounded (see UpdateTX.cs remarks) - accuracy here comes
-    // from Newton convergence against the EOS itself, not curve-fit quality, so it stays
-    // reliable much closer to both endpoints (SolveAtT's own convergence checks are the
-    // natural failure signal, not an arbitrary cutoff). The tradeoff is cost: a 2-equation
-    // damped Newton solve per call instead of three O(1) polynomial reads - use UpdateTX for
-    // the hot path and this when correctness right up to the boundary matters, or as a
-    // reference to validate/regenerate ancillary fits (including for a future fluid that has
-    // no fits yet at all).
+    // the ancillary tables, this solves the real phase-equilibrium conditions (equal pressure,
+    // equal fugacity) against the actual Helmholtz EOS via SolveAtT, and is not rejected in the
+    // last millikelvin below Tc the way UpdateTX is - SolveAtT converges to within 6 microK of Tc
+    // (its own checks are the failure signal, not a cutoff). The tradeoff is cost: a 2-equation
+    // damped Newton solve per call instead of three O(1) table reads - use UpdateTX for the hot
+    // path and this for SharpFluids compatibility, or as a reference to validate/regenerate the
+    // ancillary tables (including for a future fluid that has none yet).
     //
-    // Within the last ~0.5 K of Tc, CoolProp's own saturation solver either disagrees with
-    // this EOS by a small amount or fails outright (confirmed: SharpFluids returns a null
-    // Pressure there) - not a bug on either side, just the well-known difficulty of resolving
-    // near-critical saturation properties precisely, however good the solver. SolveAtT's
-    // own pressure/fugacity residuals stay excellent (~1e-8 Pa / ~1e-14) right up to 0.001 K
-    // from Tc regardless - there just isn't an independent oracle left to confirm it against
-    // that close.
+    // Above ~405.13 K CoolProp's own saturation solver goes wrong (non-monotonic, then garbage
+    // at 405.17 K and a native crash), so there is no CoolProp reference that close; the Gao
+    // dome itself continues to Tc (checked by continuation, see the ancillary tables' remarks).
     public static void UpdateTXExact(this Ammonia local, Temperature tTarget, double quality)
     {
         if (double.IsNaN(quality) || quality < 0.0 || quality > 1.0)
@@ -35,8 +27,8 @@ public static partial class Update
 
         if (!double.IsFinite(tTarget.Kelvin) || tTarget >= Tc)
             throw new InvalidOperationException($"UpdateTXExact invalid at/above Tc. T={tTarget.Kelvin} K.");
-        if (tTarget <= Ttriple)
-            throw new InvalidOperationException($"UpdateTXExact invalid at/below triple temperature. T={tTarget.Kelvin} K.");
+        if (tTarget < Ttriple)
+            throw new InvalidOperationException($"UpdateTXExact invalid below triple temperature. T={tTarget.Kelvin} K.");
 
         var sat = local.SolveAtT(tTarget);
         local.SetTwoPhase(sat, quality);
